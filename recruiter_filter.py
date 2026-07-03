@@ -2,13 +2,6 @@
 recruiter_filter.py
 ====================
 Détecte et filtre les annonces postées par des cabinets de recrutement externes.
-
-Les cabinets se reconnaissent à plusieurs signaux :
-1. Nom de l'entreprise contient des mots-clés typiques
-2. Description contient des formulations de chasseur de tête
-3. L'URL pointe vers un site de cabinet (optionnel)
-
-Le filtre est configurable : blacklist extensible, seuil de confiance, mode log.
 """
 
 import re
@@ -17,7 +10,6 @@ import re
 # Patterns — noms d'entreprises typiques de cabinets
 # ---------------------------------------------------------------------------
 
-# Mots/expressions dans le nom de l'entreprise → fort indicateur cabinet
 COMPANY_NAME_PATTERNS = [
     # Générique
     r"\bcabinet\b",
@@ -33,6 +25,7 @@ COMPANY_NAME_PATTERNS = [
     r"\bexecutive\s+search\b",
     r"\btalent[s]?\s+acquisition\b",
     r"\btalent[s]?\s+management\b",
+    r"\btalent[s]?\s+search\b",
     r"\bstaffing\b",
     r"\boutplacement\b",
     r"\bplacement\b",
@@ -43,8 +36,12 @@ COMPANY_NAME_PATTERNS = [
     r"\bpartenaire[s]?\s+rh\b",
     r"\bconseil\s+rh\b",
     r"\bsolutions?\s+rh\b",
+    r"\bservices?\s+rh\b",
+    r"\bemploi\s+et\s+comp[ée]tences?\b",
+    # Tout nom contenant "rh" en tant que mot isolé (ex: "Dupont RH", "RH Conseil", "ABC RH Services")
+    r"\brh\b",
 
-    # Grands cabinets français / internationaux (noms propres)
+    # Grands cabinets (noms propres)
     r"\brandstad\b",
     r"\bmanpower\b",
     r"\bradecco\b",
@@ -55,16 +52,14 @@ COMPANY_NAME_PATTERNS = [
     r"\bproman\b",
     r"\bsynergie\b",
     r"\bcrit\b",
-    r"\bbis\b",
     r"\bvedior\b",
-    r"\bkelley\b",
     r"\brendstaf\b",
     r"\blhh\b",
     r"\blee\s+hecht\b",
     r"\bheidrick\b",
     r"\bkorn\s*ferry\b",
     r"\bspencer\s+stuart\b",
-    r"\segon\s+zehnder\b",
+    r"\begon\s+zehnder\b",
     r"\bpage\s*(group|personnel|executive)\b",
     r"\bmichael\s+page\b",
     r"\bhays\b",
@@ -79,52 +74,95 @@ COMPANY_NAME_PATTERNS = [
     r"\boracle\s+search\b",
     r"\boptimum\s+recherche\b",
     r"\bg2r\b",
-    r"\bhrm\b",
     r"\bactua\b",
-    r"\bflexi\b",
     r"\bineo\b",
     r"\binterim[e]?\b",
     r"\bintérim[e]?\b",
     r"\btravail\s+temporaire\b",
     r"\bagence\s+d.emploi\b",
     r"\bagence\s+de\s+(recrutement|travail|placement)\b",
+    r"\bapec\b",
+    r"\bapec\s+recrutement\b",
+
+    # Cabinets spécialisés BTP / industrie fréquents
+    r"\bbtp\s+recrutement\b",
+    r"\brecrutement\s+btp\b",
+    r"\brecrutement\s+construction\b",
+    r"\bingéni(eur|erie)\s+recrutement\b",
+    r"\btechni(que)?\s+recrutement\b",
+    r"\bconstruct'?if\b",
+    r"\bsodifrance\b",
+    r"\bexperta\b",
+    r"\bceliade\b",
+    r"\bphénix\s+rh\b",
+    r"\bphenix\s+rh\b",
+    r"\bbâti\s+recrutement\b",
+    r"\bbati\s+recrutement\b",
+    r"\bgroupe\s+(crit|bis|actua|partnaire|adéquat|adequat)\b",
+    r"\bpartnaire\b",
+    r"\badéquat\b",
+    r"\badequat\b",
+    r"\bsofitex\b",
+    r"\bjob\s*link\b",
+    r"\brecru[it]+eur[s]?\b",
+    r"\bmission[s]?\s+interim\b",
+    r"\bmission[s]?\s+intérim\b",
+    r"\bgroupement\s+d.employeurs?\b",
+    r"\bgroupement\s+employeurs?\b",
+    r"\bgeiq\b",
 ]
 
 # Mots dans la DESCRIPTION → indicateurs cabinet
 DESCRIPTION_PATTERNS = [
-    r"notre\s+client\b",                    # "Notre client, leader dans..."
-    r"notre\s+cabinet\b",
-    r"pour\s+le\s+compte\s+de\b",           # "pour le compte de notre client"
-    r"pour\s+notre\s+client\b",
-    r"pour\s+un\s+de\s+nos\s+clients?\b",
-    r"au\s+nom\s+de\b",
-    r"nous\s+recrutons\s+pour\b",
-    r"notre\s+partenaire\b",
-    r"notre\s+mandant\b",
-    r"confié\s+par\b",
-    r"miss?ion\s+confi[ée]e\b",
-    r"cabinet\s+de\s+recrutement\b",
-    r"cabinet\s+conseil\b",
-    r"chasseur[s]?\s+de\s+têtes?\b",
-    r"recruteur[s]?\s+indépendant[s]?\b",
-    r"prestataire\s+rh\b",
-    r"consultant[s]?\s+rh\b",
-    r"votre\s+consultant[e]?\b",
-    r"notre\s+consultant[e]?\b",
-    r"référence\s+(du\s+poste|offre)\s*:",    # champ de suivi cabinet
-    r"réf\s*\.?\s*\w+[-–]\w+[-–]\w+",        # "Réf. AB-2024-001" (3 segments)
-    r"\bposte\s+(?:réf|ref)\.?\s*:",          # "Poste réf. : 123"
-    r"\boffre\s+n[°o]",                       # "Offre n°2026-042"
-    r"\bnotre\s+équipe\s+de\s+consultant",    # "notre équipe de consultants RH"
+    # Formulations "pour le compte de"
+    (r"notre\s+client\b", 2),
+    (r"notre\s+cabinet\b", 2),
+    (r"pour\s+le\s+compte\s+de\b", 2),
+    (r"pour\s+notre\s+client\b", 2),
+    (r"pour\s+un\s+de\s+nos\s+clients?\b", 2),
+    (r"au\s+nom\s+de\b", 1),
+    (r"nous\s+recrutons\s+pour\b", 2),
+    (r"notre\s+partenaire\b", 1),
+    (r"notre\s+mandant\b", 2),
+    (r"confié\s+par\b", 2),
+    (r"miss?ion\s+confi[ée]e\b", 2),
+    (r"cabinet\s+de\s+recrutement\b", 2),
+    (r"cabinet\s+conseil\b", 1),
+    (r"chasseur[s]?\s+de\s+têtes?\b", 2),
+    (r"recruteur[s]?\s+indépendant[s]?\b", 2),
+    (r"prestataire\s+rh\b", 2),
+    (r"consultant[s]?\s+rh\b", 1),
+    (r"votre\s+consultant[e]?\b", 1),
+    (r"notre\s+consultant[e]?\b", 1),
+    # Références de suivi cabinet
+    (r"référence\s+(du\s+poste|offre)\s*:", 1),
+    (r"réf\s*\.?\s*\w+[-–]\w+[-–]\w+", 1),
+    (r"\bposte\s+(?:réf|ref)\.?\s*:", 1),
+    (r"\boffre\s+n[°o]", 1),
+    (r"\bnotre\s+équipe\s+de\s+consultant", 1),
+    # Formulations BTP spécifiques
+    (r"acteur\s+(incontournable|majeur|reconnu)\s+(du\s+)?(btp|bâtiment|construction|travaux)", 2),
+    (r"société\s+(spécialisée|leader|reconnue).{0,40}(btp|bâtiment|construction).{0,40}recrute\s+pour", 2),
+    (r"notre\s+client.{0,60}(btp|bâtiment|construction|travaux\s+publics)", 2),
+    (r"nous\s+accompagnons.{0,40}(entreprise[s]?|société[s]?).{0,40}(btp|construction)", 1),
+    (r"dans\s+le\s+cadre\s+du\s+développement\s+de\s+notre\s+client", 2),
+    (r"entreprise\s+(partenaire|cliente)\b", 2),
+    (r"l['']entreprise\s+(partenaire|cliente)\b", 2),
+    (r"mission\s+en\s+(intérim|interim|cdi|cdd)\s+(pour|chez)\s+l[''un]", 1),
+    (r"poste\s+à\s+pourvoir\s+(chez|pour)\s+(notre|un)\s+(client|partenaire)", 2),
+    (r"cabinet\s+spécialisé", 2),
+    (r"agence\s+(d[e']?\s+)?recrutement\b", 2),
+    (r"agence\s+d[''']emploi\b", 2),
 ]
 
 # URL de sites connus de cabinets
 RECRUITER_URL_DOMAINS = {
     "manpower.fr", "adecco.fr", "randstad.fr", "hays.fr",
     "michaelpage.fr", "pagepersonnel.fr", "robertwalters.fr",
-    "roberthalf.fr", "cornerferry.com", "lhh.com",
+    "roberthalf.fr", "kornferry.com", "lhh.com",
     "synergie.fr", "proman.com", "gi-group.fr", "crit.fr",
-    "talent.io", "welcometothejungle.com", "erecruit.fr",
+    "adequat.com", "partnaire.fr", "sofitex.fr",
+    "actua.fr", "joblink.fr", "apec.fr",
 }
 
 # ---------------------------------------------------------------------------
@@ -132,37 +170,37 @@ RECRUITER_URL_DOMAINS = {
 # ---------------------------------------------------------------------------
 
 _COMPANY_RE = [re.compile(p, re.IGNORECASE) for p in COMPANY_NAME_PATTERNS]
-_DESC_RE     = [re.compile(p, re.IGNORECASE) for p in DESCRIPTION_PATTERNS]
+_DESC_RE    = [(re.compile(p, re.IGNORECASE), score) for p, score in DESCRIPTION_PATTERNS]
 
 
 def _score_row(row: dict) -> tuple[int, list[str]]:
     """
-    Calcule un score de suspicion cabinet + la liste des signaux détectés.
-    Score : 0 = aucun signal, ≥1 = cabinet probable, ≥3 = cabinet certain.
+    Score de suspicion cabinet.
+    Score ≥ 2 → cabinet probable (seuil défaut)
     """
     reasons: list[str] = []
     score = 0
 
-    company = str(row.get("entreprise") or "")
+    company     = str(row.get("entreprise") or "")
     description = str(row.get("description") or "")
-    url = str(row.get("url") or row.get("entreprise_url") or "")
+    url         = str(row.get("url") or row.get("entreprise_url") or "")
 
-    # Signal fort : nom de l'entreprise
+    # Signal fort : nom de l'entreprise (score +2, on s'arrête au premier match)
     for pat in _COMPANY_RE:
         if pat.search(company):
             reasons.append(f"nom: «{pat.pattern}»")
             score += 2
-            break  # un seul match nom suffit
+            break
 
-    # Signal modéré : description
-    desc_hits = 0
-    for pat in _DESC_RE:
+    # Signal description (score variable, cap à 4 points max depuis la description)
+    desc_score = 0
+    for pat, pts in _DESC_RE:
         if pat.search(description):
             reasons.append(f"desc: «{pat.pattern}»")
-            score += 1
-            desc_hits += 1
-            if desc_hits >= 2:  # cap à 2 signaux description
+            desc_score += pts
+            if desc_score >= 4:
                 break
+    score += min(desc_score, 4)
 
     # Signal léger : domaine URL
     for domain in RECRUITER_URL_DOMAINS:

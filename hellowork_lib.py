@@ -126,7 +126,16 @@ def run_apify_actor(token: str, actor_id: str, actor_input: dict, log=print, che
     while elapsed < MAX_WAIT:
         # Check annulation
         if check_cancel and check_cancel():
-            log("  🛑 Annulation détectée — abandon du polling Apify.")
+            log("  🛑 Annulation — envoi de la requête d'abort à Apify...")
+            try:
+                requests.post(
+                    f"{APIFY_BASE}/actor-runs/{run_id}/abort",
+                    params={"token": token},
+                    timeout=15,
+                )
+                log(f"  ✓ Run Apify {run_id} aborted.")
+            except Exception:
+                log(f"  ⚠️  Impossible d'aborter le run {run_id} — il continuera côté serveur.")
             raise HelloWorkError("Recherche annulée par l'utilisateur.")
 
         time.sleep(POLL_INTERVAL)

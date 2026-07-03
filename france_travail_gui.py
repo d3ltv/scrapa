@@ -86,13 +86,35 @@ SECTEURS: dict[str, dict] = {
             "2311", "2312", "2320",  # Verre, céramique
             "2351", "2352",          # Ciment, béton
             "4669",                  # Négoce matériaux
+            "7111", "7112",          # Architecture, ingénierie
+            "4312", "4313",          # Terrassement, forages
+            "4321", "4322", "4329",  # Électricité, plomberie, autres install.
+            "4331", "4332", "4333",  # Plâtrerie, menuiserie, revêtements
+            "4334", "4339",          # Peinture, finitions
+            "4391", "4399",          # Couverture, autres travaux spécialisés
         ],
         "keywords": [
-            "maçon", "carreleur", "plombier", "électricien", "couvreur",
-            "charpentier", "menuisier", "peintre bâtiment", "conducteur travaux",
-            "chef chantier", "génie civil", "terrassier", "coffreur",
-            "plaquiste", "façadier", "étancheur", "bardeur", "poseur",
-            "technicien bâtiment", "ingénieur BTP", "architecte",
+            # Gros œuvre
+            "maçon", "maçon coffreur", "coffreur bancheur", "ferrailleur",
+            "bétonnier", "terrassier", "conducteur engins BTP",
+            "chef de chantier gros œuvre", "conducteur travaux gros œuvre",
+            # Second œuvre
+            "plombier", "plombier chauffagiste", "chauffagiste",
+            "électricien bâtiment", "électricien tertiaire",
+            "plaquiste", "plaquiste peintre", "peintre bâtiment",
+            "carreleur", "solier", "poseur revêtements sols",
+            "menuisier", "menuisier poseur", "charpentier bois",
+            "couvreur", "couvreur zingueur", "étancheur",
+            "façadier", "bardeur", "isolateur", "plâtrier",
+            # Génie civil / TP
+            "génie civil", "canalisateur", "paveur",
+            "technicien travaux publics", "conducteur travaux TP",
+            # Encadrement / bureau
+            "conducteur de travaux", "chef de chantier",
+            "ingénieur BTP", "ingénieur travaux", "ingénieur structure",
+            "architecte", "dessinateur projeteur BTP", "métreur",
+            "économiste de la construction", "technicien bureau d'études BTP",
+            "responsable QSE BTP", "directeur travaux",
         ],
     },
     "Restauration / Hôtellerie": {
@@ -2322,8 +2344,38 @@ class App(tk.Tk):
                 elif kind == "cancelled":
                     self._progress.stop()
                     self._set_ui_enabled(True)
-                    self._status_var.set("🛑  Recherche annulée.")
+                    self._status_var.set("🛑  Recherche annulée — aucun résultat partiel.")
                     self._log_msg("🛑  Recherche annulée.")
+                elif kind == "search_done_partial":
+                    # Annulation avec résultats partiels récupérés
+                    self._progress.stop()
+                    self._set_ui_enabled(True)
+                    partial_rows = payload
+                    if partial_rows:
+                        new_rows, dupes = filter_new(partial_rows)
+                        ignored_ids = set()
+                        if dupes:
+                            seen = load_seen_ids()
+                            ignored_ids = {get_row_id(r) for r in partial_rows if get_row_id(r) in seen}
+                        if self._search_mode == "add":
+                            existing_keys = {get_row_id(r) for r in self._pending_rows}
+                            added = [r for r in new_rows if get_row_id(r) not in existing_keys]
+                            self._pending_rows.extend(added)
+                            self._ignored_ids.update(ignored_ids)
+                        else:
+                            self._pending_rows = new_rows
+                            self._ignored_ids = ignored_ids
+                        n = len(new_rows)
+                        self._status_var.set(
+                            f"🛑  Annulée — {n} résultat(s) partiel(s) récupéré(s)"
+                            + (f"  •  {dupes} doublon(s) ignoré(s)" if dupes else "")
+                        )
+                        self._download_btn.configure(state="normal")
+                        self._add_btn.configure(state="normal")
+                        self._refresh_results_page()
+                        self._show_results_page()
+                    else:
+                        self._status_var.set("🛑  Annulée — aucun résultat partiel.")
                 elif kind == "error":
                     self._progress.stop()
                     self._set_ui_enabled(True)
@@ -2443,22 +2495,9 @@ class App(tk.Tk):
         if jours:
             base["publieeDepuis"] = jours
 
-        # Secteur prédéfini → codes NAF via secteurActivite
-        # Remplace ou complète les mots-clés manuels
-        ft_secteur = self.ft_secteur_var.get()
-        if ft_secteur != "(aucun)" and ft_secteur in SECTEURS:
-            naf_codes = SECTEURS[ft_secteur]["naf"]
-            # L'API FT accepte plusieurs codes séparés par virgule
-            base["secteurActivite"] = ",".join(naf_codes)
-            # On ne passe PAS motsCles en même temps pour éviter de restreindre
-            # à un titre spécifique — le secteur NAF est suffisant
-            base.pop("motsCles", None)
-
-        # Contrats — un seul paramètre typeContrat avec les codes séparés par virgule
-        # L'API FT accepte : typeContrat=CDI,CDD,MIS  (pas besoin de requêtes multiples)
+        # Contrats
         selected_labels = [lbl for lbl, var in self.ft_contract_vars.items() if var.get()]
         if selected_labels:
-            # Déduplication des codes (Alternance → CDI,CDD peut chevaucher CDI seul)
             codes: list[str] = []
             seen_codes: set[str] = set()
             for lbl in selected_labels:
@@ -2469,18 +2508,40 @@ class App(tk.Tk):
                         codes.append(code)
             base["typeContrat"] = ",".join(codes)
 
-        # Localisations — une requête par ville/département
+        # Secteur prédéfini → on utilise les mots-clés métiers (comme HW)
+        # secteurActivite est abandonné car l'API exige des codes NAF précis
+        # et accepte seulement 2 codes max, ce qui est trop limitant.
+        ft_secteur = self.ft_secteur_var.get()
+        kw_groups: list[str] = []  # chaque élément = un mot-clé pour motsCles
+        if ft_secteur != "(aucun)" and ft_secteur in SECTEURS:
+            sector_kw = SECTEURS[ft_secteur]["keywords"]
+            kw_groups = sector_kw
+            base.pop("motsCles", None)  # le secteur remplace les mots-clés manuels
+
+        # Localisations
         locs = self._ft_locations.get_tags()
         loc_params = [self._resolve_location(l) for l in locs] if locs else [{}]
 
         result = []
         seen: set[str] = set()
-        for lp in loc_params:
-            p = {**base, **lp}
-            key = str(sorted(p.items()))
-            if key not in seen:
-                seen.add(key)
-                result.append(p)
+
+        if kw_groups:
+            # Une requête par mot-clé × localisation
+            for kw in kw_groups:
+                for lp in loc_params:
+                    p = {**base, "motsCles": kw, **lp}
+                    key = str(sorted(p.items()))
+                    if key not in seen:
+                        seen.add(key)
+                        result.append(p)
+        else:
+            for lp in loc_params:
+                p = {**base, **lp}
+                key = str(sorted(p.items()))
+                if key not in seen:
+                    seen.add(key)
+                    result.append(p)
+
         return result
 
     def _build_ft_params(self) -> dict:
@@ -2714,11 +2775,10 @@ class App(tk.Tk):
                 self._log(f"France Travail : {len(rows)} offres après filtres\n")
                 all_rows.extend(rows)
 
-            # Check annulation entre les deux sources
+            # Check annulation entre les deux sources — on garde les résultats FT déjà trouvés
             if self._cancel_search:
-                self._queue.put(("log", "🛑  Recherche annulée par l'utilisateur."))
-                self._queue.put(("search_done", None))
-                return
+                self._log("🛑  Recherche annulée — récupération des résultats partiels...")
+                # On continue avec all_rows déjà rempli par FT si applicable
 
             if use_hw:
                 self._log("=== HelloWork (Apify) ===")
@@ -2728,16 +2788,15 @@ class App(tk.Tk):
 
                 # Secteur prédéfini → remplace ou complète les mots-clés manuels
                 hw_secteur = self.hw_secteur_var.get()
-                if hw_secteur != "(aucun)" and hw_secteur in SECTEURS:
+                sector_mode = hw_secteur != "(aucun)" and hw_secteur in SECTEURS
+                if sector_mode:
                     sector_kw = SECTEURS[hw_secteur]["keywords"]
-                    # Les mots-clés manuels priment ; le secteur ajoute les métiers
                     if keywords:
-                        # Mots-clés manuels + métiers du secteur combinés
                         keywords = keywords + [k for k in sector_kw if k not in keywords]
                     else:
-                        keywords = sector_kw
+                        keywords = list(sector_kw)
                     self._log(
-                        f"Secteur «{hw_secteur}» → {len(sector_kw)} métiers envoyés"
+                        f"Secteur «{hw_secteur}» → {len(keywords)} métiers au total"
                     )
 
                 if not keywords and not self.hw_location_var.get().strip():
@@ -2752,21 +2811,70 @@ class App(tk.Tk):
                     radius_km = int(self.hw_rayon_var.get().strip()) if self.hw_rayon_var.get().strip() else None
                 except ValueError:
                     radius_km = None
+                try:
+                    group_size = max(1, int(self.hw_group_size_var.get().strip() or "5"))
+                except ValueError:
+                    group_size = 5
+
                 rayon_log = f" +{radius_km}km" if radius_km else ""
-                self._log(f"Mots-clés : {keywords if keywords else '(aucun)'}")
                 self._log(f"Lieu : {location or '(tous)'}{rayon_log} | Depuis : {self.hw_date_var.get()}")
 
-                hw_rows = fetch_hellowork_offers(
-                    apify,
-                    search_queries=keywords,
-                    location=location,
-                    radius_km=radius_km,
-                    max_results=hw_max,
-                    contract_types=contract_types or None,
-                    date_posted=date_posted,
-                    log=self._log,
-                    check_cancel=lambda: self._cancel_search,
-                )
+                # Avertissement si secteur sans lieu
+                if sector_mode and not location:
+                    self._log(
+                        "⚠️  Aucun lieu renseigné avec un secteur — "
+                        "la recherche couvre toute la France."
+                    )
+
+                # ── Découpage en groupes ─────────────────────────────
+                if sector_mode and len(keywords) > group_size:
+                    groups = [keywords[i:i+group_size]
+                              for i in range(0, len(keywords), group_size)]
+                    self._log(
+                        f"{len(keywords)} métiers → {len(groups)} groupes de {group_size} "
+                        f"→ {len(groups)} runs Apify"
+                    )
+                else:
+                    groups = [keywords] if keywords else [[]]
+
+                # Max par groupe : répartition équitable, plafonnée à hw_max au total
+                hw_rows_all: list[dict] = []
+                seen_hw_ids: set = set()
+                max_per_group = max(1, hw_max // max(len(groups), 1))
+
+                for gi, grp in enumerate(groups, 1):
+                    # Stop dès que le total global est atteint
+                    if len(hw_rows_all) >= hw_max:
+                        self._log(f"  ✓ Limite de {hw_max} résultats atteinte — groupes restants ignorés.")
+                        break
+                    if self._cancel_search:
+                        self._log(f"🛑  Annulation après {gi-1}/{len(groups)} groupes — résultats partiels conservés.")
+                        break
+                    remaining = hw_max - len(hw_rows_all)
+                    cap = min(max_per_group, remaining)
+                    self._log(f"  Groupe [{gi}/{len(groups)}] : {grp}  (max {cap})")
+                    grp_rows = fetch_hellowork_offers(
+                        apify,
+                        search_queries=grp,
+                        location=location,
+                        radius_km=radius_km,
+                        max_results=cap,
+                        contract_types=contract_types or None,
+                        date_posted=date_posted,
+                        log=self._log,
+                        check_cancel=lambda: self._cancel_search,
+                    )
+                    # Déduplication inter-groupes par get_row_id
+                    added = 0
+                    for r in grp_rows:
+                        rid = get_row_id(r)
+                        if rid not in seen_hw_ids:
+                            seen_hw_ids.add(rid)
+                            hw_rows_all.append(r)
+                            added += 1
+                    self._log(f"  → {added} nouvelles offres (total cumulé : {len(hw_rows_all)})")
+
+                hw_rows = hw_rows_all
                 post_kw = {k: v for k, v in post.items()
                            if k not in ("exclude_recruiters", "recruiter_threshold")}
                 hw_rows = apply_post_filters(hw_rows, **post_kw)
@@ -2775,8 +2883,18 @@ class App(tk.Tk):
                 all_rows.extend(hw_rows)
 
             if not all_rows:
-                self._log("Aucune offre trouvée avec ces critères.")
+                if self._cancel_search:
+                    self._log("🛑  Recherche annulée — aucun résultat partiel disponible.")
+                else:
+                    self._log("Aucune offre trouvée avec ces critères.")
                 self._queue.put(("search_done", None))
+                return
+
+            if self._cancel_search:
+                self._log(f"🛑  Recherche annulée — {len(all_rows)} offre(s) partielle(s) récupérées.")
+                # Court-circuit : on envoie directement les résultats partiels
+                # sans passer par la déduplication cache (faite dans _poll_queue)
+                self._queue.put(("search_done_partial", all_rows))
                 return
 
             # Deduplication against seen-IDs cache (read-only)
@@ -2811,12 +2929,19 @@ class App(tk.Tk):
             self._queue.put(("search_done", (new_rows, ignored_ids)))
 
         except (FranceTravailError, HelloWorkError) as e:
-            if self._cancel_search:
+            if self._cancel_search and all_rows:
+                # Annulation avec résultats partiels — on les envoie quand même
+                self._log(f"🛑  Annulation — envoi de {len(all_rows)} résultat(s) partiel(s).")
+                self._queue.put(("search_done_partial", all_rows))
+            elif self._cancel_search:
                 self._queue.put(("cancelled", None))
             else:
                 self._queue.put(("error", str(e)))
         except Exception as e:
-            if self._cancel_search:
+            if self._cancel_search and all_rows:
+                self._log(f"🛑  Annulation — envoi de {len(all_rows)} résultat(s) partiel(s).")
+                self._queue.put(("search_done_partial", all_rows))
+            elif self._cancel_search:
                 self._queue.put(("cancelled", None))
             else:
                 self._queue.put(("error", f"Erreur inattendue : {e}"))
