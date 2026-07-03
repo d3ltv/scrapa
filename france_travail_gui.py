@@ -239,6 +239,207 @@ SECTEURS: dict[str, dict] = {
             "ingénieur pédagogique", "tuteur", "coach professionnel",
         ],
     },
+    "Immobilier": {
+        "naf": ["6810", "6820", "6831", "6832"],
+        "keywords": [
+            "agent immobilier", "négociateur immobilier", "conseiller immobilier",
+            "gestionnaire locatif", "property manager", "syndic de copropriété",
+            "administrateur de biens", "expert immobilier", "promoteur immobilier",
+            "directeur agence immobilière", "chargé de transaction", "asset manager",
+        ],
+    },
+    "Juridique / Droit": {
+        "naf": ["6910", "6920"],
+        "keywords": [
+            "juriste", "avocat", "notaire", "huissier", "greffier",
+            "juriste d'entreprise", "juriste droit social", "juriste droit des affaires",
+            "paralégal", "responsable juridique", "directeur juridique",
+            "chargé de conformité", "compliance officer",
+        ],
+    },
+    "Marketing / Communication": {
+        "naf": ["7311", "7312", "7021", "7022", "6391", "6399"],
+        "keywords": [
+            "chargé de communication", "responsable marketing", "chef de projet marketing",
+            "community manager", "content manager", "traffic manager",
+            "responsable SEO", "chargé de relations presse", "directeur marketing",
+            "brand manager", "chargé d'études marketing", "graphic designer",
+            "concepteur rédacteur", "chef de publicité",
+        ],
+    },
+    "Ressources Humaines": {
+        "naf": ["7810", "7820", "7830"],
+        "keywords": [
+            "chargé RH", "responsable RH", "DRH", "gestionnaire paie",
+            "responsable paie", "chargé de recrutement", "talent acquisition",
+            "responsable formation", "HRBP", "business partner RH",
+            "responsable GPEC", "responsable relations sociales", "assistant RH",
+        ],
+    },
+    "Hôpital / Urgences / Bloc": {
+        "naf": ["8610"],
+        "keywords": [
+            "infirmier bloc opératoire", "IBODE", "IADE", "infirmier urgences",
+            "aide-soignant urgences", "brancardier", "ambulancier",
+            "manipulateur radio", "préparateur en pharmacie hospitalière",
+            "chirurgien", "médecin urgentiste", "réanimateur",
+            "cadre de santé", "directeur soins infirmiers",
+        ],
+    },
+    "Énergie / Environnement": {
+        "naf": [
+            "3511", "3512", "3513", "3514",
+            "3521", "3522", "3523",
+            "3600", "3811", "3812", "3821", "3822", "3900", "7112",
+        ],
+        "keywords": [
+            "technicien énergie", "ingénieur énergie", "électricien industriel",
+            "technicien photovoltaïque", "installateur solaire",
+            "chargé de mission environnement", "responsable HSE",
+            "technicien traitement eau", "ingénieur génie de l'environnement",
+            "auditeur énergétique", "gestionnaire réseau électrique",
+            "technicien maintenance éolienne", "chef de projet ENR",
+        ],
+    },
+    "Sécurité / Gardiennage": {
+        "naf": ["8010", "8020", "8030"],
+        "keywords": [
+            "agent de sécurité", "agent de surveillance", "vigile",
+            "agent cynophile", "agent de sûreté", "responsable sécurité",
+            "chef de poste sécurité", "SSIAP", "rondier", "gardien",
+            "opérateur vidéosurveillance", "technicien alarme",
+            "installateur systèmes sécurité",
+        ],
+    },
+    "Automobile / Mécanique": {
+        "naf": [
+            "2910", "2920", "2931", "2932",
+            "4511", "4519", "4520", "4531", "4532", "4540",
+        ],
+        "keywords": [
+            "mécanicien automobile", "technicien automobile", "carrossier",
+            "peintre carrosserie", "électricien automobile", "contrôleur technique",
+            "réceptionnaire après-vente", "chef d'atelier automobile",
+            "vendeur automobile", "conseiller commercial automobiles",
+            "préparateur véhicule", "mécanicien poids lourd", "technicien diagnostic",
+        ],
+    },
+    "Aéronautique / Défense": {
+        "naf": ["3030", "3315", "8422"],
+        "keywords": [
+            "technicien aéronautique", "mécanicien aéronautique", "ingénieur aéronautique",
+            "technicien de maintenance avion", "agent piste", "agent escale",
+            "contrôleur aérien", "ingénieur systèmes embarqués", "technicien avionique",
+            "ingénieur navigabilité", "responsable qualité aéronautique",
+            "chef de projet aéronautique",
+        ],
+    },
+    "Tourisme / Loisirs / Sport": {
+        "naf": [
+            "7911", "7912", "7990",
+            "9311", "9312", "9313", "9319", "9321", "9329",
+        ],
+        "keywords": [
+            "agent de voyage", "conseiller voyages", "chef de produit tourisme",
+            "guide touristique", "accompagnateur tourisme", "animateur vacances",
+            "directeur camping", "responsable club de sport",
+            "éducateur sportif", "coach sportif", "maître nageur",
+            "moniteur ski", "animateur culturel", "directeur centre de loisirs",
+        ],
+    },
+    "Nettoyage / Propreté": {
+        "naf": ["8121", "8122", "8129"],
+        "keywords": [
+            "agent de nettoyage", "agent de propreté", "technicien de surface",
+            "responsable nettoyage", "chef d'équipe propreté",
+            "agent de nettoyage industriel", "laveur de vitres",
+            "responsable exploitation propreté", "chef de secteur propreté",
+        ],
+    },
+    "Audiovisuel / Médias / Culture": {
+        "naf": [
+            "5911", "5912", "5913", "5914", "5920",
+            "6010", "6020",
+            "9001", "9002", "9003", "9004",
+        ],
+        "keywords": [
+            "journaliste", "rédacteur", "présentateur", "caméraman",
+            "monteur vidéo", "chef opérateur", "réalisateur",
+            "chargé de production audiovisuelle", "régisseur",
+            "technicien son", "ingénieur du son", "éclairagiste",
+            "responsable éditorial", "directeur artistique",
+        ],
+    },
+    "Conseil / Management": {
+        "naf": ["7021", "7022", "6920", "8299"],
+        "keywords": [
+            "consultant", "consultant en management", "manager de transition",
+            "chef de projet", "directeur de projet", "PMO",
+            "business analyst", "consultant stratégie", "consultant organisation",
+            "directeur général", "DGA", "responsable opérations",
+        ],
+    },
+    "Supply Chain / Achats": {
+        "naf": ["4619", "4631", "4632", "4633", "5210", "5224", "5229"],
+        "keywords": [
+            "acheteur", "responsable achats", "directeur achats",
+            "approvisionneur", "responsable approvisionnement",
+            "gestionnaire supply chain", "responsable supply chain",
+            "planificateur", "demand planner", "supply planner",
+            "responsable entrepôt", "coordinateur logistique",
+            "chef de projet supply chain", "responsable douane",
+        ],
+    },
+    "Informatique / Réseaux / Télécom": {
+        "naf": ["6110", "6120", "6130", "6190", "6201", "6202", "6203", "6209"],
+        "keywords": [
+            "technicien réseau", "administrateur réseau", "ingénieur télécoms",
+            "technicien télécom", "intégrateur réseaux", "NOC engineer",
+            "ingénieur infrastructure", "technicien fibre optique",
+            "responsable infrastructure SI", "ingénieur cloud",
+            "technicien helpdesk", "technicien support N2", "technicien N3",
+        ],
+    },
+    "Comptabilité / Gestion": {
+        "naf": ["6920"],
+        "keywords": [
+            "comptable", "comptable général", "comptable fournisseurs",
+            "comptable clients", "assistant comptable", "chef comptable",
+            "expert-comptable", "contrôleur de gestion", "analyste financier",
+            "trésorier", "responsable administratif et financier", "DAF",
+            "auditeur interne", "auditeur externe", "responsable consolidation",
+        ],
+    },
+    "Services à la personne": {
+        "naf": ["8810", "8891", "8899", "9601", "9602", "9609"],
+        "keywords": [
+            "aide à domicile", "auxiliaire de vie", "assistant de vie",
+            "garde d'enfants", "nounou", "auxiliaire parentale",
+            "accompagnant personnes handicapées", "ADVF",
+            "responsable secteur aide à domicile", "coordinateur services",
+            "employé familial", "femme de ménage", "homme toutes mains",
+        ],
+    },
+    "Naval / Maritime": {
+        "naf": ["3011", "3012", "5010", "5020", "5030"],
+        "keywords": [
+            "marin", "matelot", "officier de port", "capitaine",
+            "mécanicien naval", "technicien naval", "soudeur naval",
+            "chaudronnier naval", "outilleur naval", "ingénieur naval",
+            "agent portuaire", "agent maritime", "chef de bord",
+            "électricien naval", "responsable flotte",
+        ],
+    },
+    "Pharmacie / Cosmétique / Chimie": {
+        "naf": ["2011", "2012", "2013", "2014", "2020", "2110", "2120"],
+        "keywords": [
+            "pharmacien", "préparateur en pharmacie", "responsable assurance qualité",
+            "ingénieur chimiste", "technicien laboratoire", "technicien qualité",
+            "responsable production pharmaceutique", "ingénieur procédés",
+            "chef de produit cosmétique", "formateur cosmétique",
+            "regulatory affairs", "affaires réglementaires",
+        ],
+    },
 }
 
 SECTEUR_CHOICES = ["(aucun)"] + sorted(SECTEURS.keys())
@@ -424,6 +625,7 @@ class App(tk.Tk):
         self._res_filtered: list[dict] = []
         self._col_vars: dict[str, tk.BooleanVar] = {}
         self._hide_dupes_active: bool = False
+        self._cancel_search: bool = False   # flag d'annulation
         self._recruiter_threshold_var = tk.StringVar(value="2")
         self.filter_recruiters_var    = tk.BooleanVar(value=False)
         self.post_company_var         = tk.StringVar(value="")
@@ -432,6 +634,7 @@ class App(tk.Tk):
 
         self._setup_style()
         self._build_ui()
+        self._apply_theme()   # initialise les styles ttk au démarrage
         self.after(100, self._poll_queue)
 
     def _font(self, size: int, weight: str = "normal") -> tuple:
@@ -597,18 +800,18 @@ class App(tk.Tk):
 
         # Right: theme toggle + settings
         tk.Button(
-            navbar, text="⚙  Paramètres", bg=self._ACCENT, fg="white",
+            navbar, text="⚙️", bg=self._ACCENT, fg="white",
             activebackground="#005BBB", activeforeground="white",
             relief="flat", cursor="hand2", padx=10,
-            font=self._font(10),
+            font=self._font(14),
             command=self._open_settings,
         ).pack(side="right", padx=14)
 
         self._theme_btn = tk.Button(
-            navbar, text="🌙  Nuit", bg=self._ACCENT, fg="white",
+            navbar, text="🌙", bg=self._ACCENT, fg="white",
             activebackground="#005BBB", activeforeground="white",
             relief="flat", cursor="hand2", padx=10,
-            font=self._font(10),
+            font=self._font(14),
             command=self._toggle_theme,
         )
         self._theme_btn.pack(side="right", padx=(0, 4))
@@ -621,6 +824,8 @@ class App(tk.Tk):
             nav_mid, text="🔍 Recherche",
             relief="flat", cursor="hand2", padx=14, pady=4,
             font=self._font(11, "bold"),
+            bg=self._CARD, fg=self._ACCENT,
+            activebackground=self._ACCENT, activeforeground="white",
             command=self._show_search_page,
         )
         self._nav_search_btn.pack(side="left", padx=(0, 4))
@@ -630,6 +835,8 @@ class App(tk.Tk):
             nav_mid, textvariable=self._nav_results_var,
             relief="flat", cursor="hand2", padx=14, pady=4,
             font=self._font(11, "bold"),
+            bg=self._ACCENT, fg="white",
+            activebackground="#005BBB", activeforeground="white",
             command=self._show_results_page,
         )
         self._nav_results_btn.pack(side="left", padx=(0, 4))
@@ -654,138 +861,218 @@ class App(tk.Tk):
         self._setup_style()       # recalcule les variables de couleur + styles ttk
         self._apply_theme()       # repeint tous les widgets tk.*
         self._theme_btn.configure(
-            text="☀️  Jour" if self._dark_mode else "🌙  Nuit",
+            text="☀️" if self._dark_mode else "🌙",
             bg=self._ACCENT,
         )
 
     def _apply_theme(self):
-        """Repeint récursivement tous les widgets tk.* avec la palette courante."""
-        T   = self._T
-        BG  = self._BG
-        CARD = self._CARD
-        FG  = self._FG
+        """Repeint récursivement tous les widgets avec la palette courante."""
+        T        = self._T
+        BG       = self._BG
+        CARD     = self._CARD
+        FG       = self._FG
         FG_MUTED = self._FG_MUTED
         ACCENT   = self._ACCENT
         BORDER   = self._BORDER
+        SEC_BG   = T["BTN_SECONDARY_BG"]
+        SEC_FG   = T["BTN_SECONDARY_FG"]
+        SEC_ACT  = T["BTN_SECONDARY_ACT"]
+
+        # ── Couleurs connues des deux thèmes ─────────────────────────
+        ALL_BG   = {"#F5F5F7", "#1C1C1E"}   # fonds page
+        ALL_CARD = {"#FFFFFF", "#2C2C2E"}   # fonds card
+        ALL_FG   = {"#1D1D1F", "#F2F2F7"}   # texte principal
+        ALL_MUTED= {"#6E6E73", "#8E8E93"}   # texte muted
+        ALL_SEC  = {"#E8E8ED", "#3A3A3C", "#D2D2D7", "#48484A"}  # secondaire
+        ALL_ACNT = {"#0071E3", "#0A84FF"}   # accent
 
         def recolor(widget):
             wtype = widget.winfo_class()
-
             try:
-                # ── Fenêtre principale ──────────────────────────────
                 if isinstance(widget, tk.Tk):
                     widget.configure(bg=BG)
 
-                # ── Frames simples ──────────────────────────────────
                 elif wtype == "Frame":
                     cur = widget.cget("bg")
-                    # Frames "card" (anciennement blanc)
-                    if cur in ("#FFFFFF", "#2C2C2E"):
+                    if cur in ALL_CARD:
                         widget.configure(bg=CARD)
-                    # Frames "background"
-                    elif cur in ("#F5F5F7", "#1C1C1E"):
+                    elif cur in ALL_BG:
                         widget.configure(bg=BG)
-                    # Stat bar (même traitement que card)
-                    # Frames colorées fixes (rouge, vert, accent) → on ne touche pas
 
-                # ── LabelFrames ─────────────────────────────────────
                 elif wtype == "Labelframe":
-                    widget.configure(
-                        bg=CARD, fg=FG,
-                        highlightbackground=BORDER,
-                    )
+                    widget.configure(bg=CARD, fg=FG, highlightbackground=BORDER)
 
-                # ── Labels ──────────────────────────────────────────
                 elif wtype == "Label":
                     cur_bg = widget.cget("bg")
                     cur_fg = widget.cget("fg")
-                    new_bg = CARD if cur_bg in ("#FFFFFF", "#2C2C2E") else BG
-                    # Couleurs spéciales fixes (rouge erreur, vert, accent) → on garde
-                    if cur_bg in ("#F5F5F7", "#1C1C1E", "#FFFFFF", "#2C2C2E"):
-                        widget.configure(bg=new_bg)
-                    if cur_fg in ("#1D1D1F", "#F2F2F7"):
+                    if cur_bg in ALL_CARD:
+                        widget.configure(bg=CARD)
+                    elif cur_bg in ALL_BG:
+                        widget.configure(bg=BG)
+                    if cur_fg in ALL_FG:
                         widget.configure(fg=FG)
-                    elif cur_fg in ("#6E6E73", "#8E8E93"):
+                    elif cur_fg in ALL_MUTED:
                         widget.configure(fg=FG_MUTED)
-                    # Stat bar bg
-                    if cur_bg in ("#FFFFFF", "#2C2C2E") and cur_fg in ("#1D1D1F", "#F2F2F7"):
-                        widget.configure(bg=CARD, fg=FG)
 
-                # ── Checkbuttons ────────────────────────────────────
                 elif wtype == "Checkbutton":
                     cur_bg = widget.cget("bg")
-                    new_bg = CARD if cur_bg in ("#FFFFFF", "#2C2C2E") else BG
-                    widget.configure(
-                        bg=new_bg, fg=FG,
-                        activebackground=new_bg,
-                        selectcolor=CARD,
-                    )
+                    new_bg = CARD if cur_bg in ALL_CARD else BG
+                    check_color = "#30D158" if self._dark_mode else ACCENT
+                    widget.configure(bg=new_bg, fg=FG,
+                                     activebackground=new_bg, selectcolor=check_color)
 
-                # ── Buttons tk.Button ────────────────────────────────
                 elif wtype == "Button":
                     cur_bg = widget.cget("bg")
-                    cur_fg = widget.cget("fg")
-                    # Boutons accent (bleu) → met juste à jour la couleur d'accent
-                    if cur_bg in ("#0071E3", "#0A84FF"):
-                        widget.configure(bg=ACCENT, activebackground="#005BBB")
-                    # Boutons danger (rouge) → on ne touche pas
-                    elif cur_bg in ("#FF3B30", "#CC2D24"):
-                        pass
-                    # Boutons succès (vert) → on ne touche pas
-                    elif cur_bg in ("#34C759",):
-                        pass
-                    # Boutons secondaires (blanc/gris clair)
-                    elif cur_bg in ("#FFFFFF", "#2C2C2E",
-                                    "#E8E8ED", "#3A3A3C",
-                                    "#D2D2D7", "#48484A"):
-                        widget.configure(
-                            bg=T["BTN_SECONDARY_BG"],
-                            fg=T["BTN_SECONDARY_FG"],
-                            activebackground=T["BTN_SECONDARY_ACT"],
-                        )
-                    # Fond BG (navbar items)
-                    elif cur_bg in ("#F5F5F7", "#1C1C1E"):
-                        widget.configure(bg=BG, fg=FG)
+                    if cur_bg in {"#FF3B30", "#CC2D24"}:
+                        pass   # rouge — inchangé
+                    elif cur_bg in {"#34C759"}:
+                        pass   # vert — inchangé
+                    else:
+                        # Tout le reste passe en bleu accent + texte blanc
+                        widget.configure(bg=ACCENT, fg="white",
+                                         activebackground="#005BBB",
+                                         activeforeground="white")
 
-                # ── Text (journal) ───────────────────────────────────
                 elif wtype == "Text":
-                    widget.configure(
-                        bg=T["LOG_BG"], fg=T["LOG_FG"],
-                        insertbackground=T["LOG_FG"],
-                        selectbackground=T["LOG_SEL"],
-                    )
+                    widget.configure(bg=T["LOG_BG"], fg=T["LOG_FG"],
+                                     insertbackground=T["LOG_FG"],
+                                     selectbackground=T["LOG_SEL"])
 
-                # ── Listbox ─────────────────────────────────────────
                 elif wtype == "Listbox":
-                    widget.configure(
-                        bg=T["LOG_BG"], fg=T["LOG_FG"],
-                        selectbackground=T["LOG_SEL"],
-                    )
+                    widget.configure(bg=T["LOG_BG"], fg=T["LOG_FG"],
+                                     selectbackground=T["LOG_SEL"])
+
+                # ── ttk widgets — on force via option_add ─────────────
+                elif wtype in ("TButton", "TCheckbutton"):
+                    pass   # géré par ttk.Style
+
+                elif wtype == "TEntry":
+                    widget.configure(style="TEntry")
+
+                elif wtype == "TCombobox":
+                    widget.configure(style="TCombobox")
 
             except tk.TclError:
-                pass  # widget déjà détruit ou option non supportée
+                pass
 
-            # Récursion sur les enfants
             for child in widget.winfo_children():
                 recolor(child)
 
         recolor(self)
 
-        # ── Treeview (résultats) ─────────────────────────────────────
+        # ── Boutons navbar — état selon page active ───────────────────
+        # On détecte la page active et on réapplique les couleurs correctes
         try:
-            style = ttk.Style(self)
-            style.configure("Treeview",
-                            background=CARD, foreground=FG,
-                            fieldbackground=CARD, rowheight=22)
-            style.configure("Treeview.Heading",
-                            background=T["BTN_SECONDARY_BG"], foreground=FG)
-            style.map("Treeview",
-                      background=[("selected", ACCENT)],
-                      foreground=[("selected", "white")])
+            if self._search_page.winfo_ismapped():
+                self._nav_search_btn.configure(bg=CARD, fg=ACCENT,
+                                               activebackground=ACCENT, activeforeground="white")
+                self._nav_results_btn.configure(bg=ACCENT, fg="white",
+                                                activebackground="#005BBB", activeforeground="white")
+            else:
+                self._nav_results_btn.configure(bg=CARD, fg=ACCENT,
+                                                activebackground=ACCENT, activeforeground="white")
+                self._nav_search_btn.configure(bg=ACCENT, fg="white",
+                                               activebackground="#005BBB", activeforeground="white")
+        except Exception:
+            pass
+
+        # ── Forcer les styles ttk après la récursion ─────────────────
+        style = ttk.Style(self)
+
+        # Entry
+        style.configure("TEntry",
+                         fieldbackground=CARD, foreground=FG,
+                         insertcolor=FG, selectbackground=ACCENT,
+                         selectforeground="white", bordercolor=BORDER)
+        style.map("TEntry",
+                  fieldbackground=[("disabled", BG), ("readonly", BG)],
+                  foreground=[("disabled", FG_MUTED)])
+
+        # Combobox
+        style.configure("TCombobox",
+                         fieldbackground=CARD, foreground=FG,
+                         selectbackground=ACCENT, selectforeground="white",
+                         arrowcolor=FG, bordercolor=BORDER)
+        style.map("TCombobox",
+                  fieldbackground=[("readonly", CARD), ("disabled", BG)],
+                  foreground=[("readonly", FG), ("disabled", FG_MUTED)],
+                  arrowcolor=[("disabled", FG_MUTED)])
+
+        # Button ttk
+        style.configure("TButton",
+                         background=ACCENT, foreground="white",
+                         bordercolor=ACCENT, darkcolor=ACCENT, lightcolor=ACCENT,
+                         relief="flat", padding=(6, 4))
+        style.map("TButton",
+                  background=[("active", "#005BBB"), ("disabled", "#A0A0A0")],
+                  foreground=[("disabled", "#D0D0D0")])
+
+        # Run button
+        style.configure("Run.TButton",
+                         background=ACCENT, foreground="white",
+                         font=self._font(12, "bold"), padding=(20, 8))
+        style.map("Run.TButton",
+                  background=[("active", SEC_ACT), ("disabled", "#A0A0A0")],
+                  foreground=[("disabled", "#D0D0D0")])
+
+        # Checkbutton ttk
+        CHECK_COLOR = "#30D158" if self._dark_mode else ACCENT
+        style.configure("TCheckbutton",
+                         background=BG, foreground=FG,
+                         indicatorcolor=CARD, indicatorrelief="flat")
+        style.map("TCheckbutton",
+                  background=[("active", BG)],
+                  foreground=[("active", FG)],
+                  indicatorcolor=[("selected", CHECK_COLOR), ("pressed", CHECK_COLOR)])
+
+        style.configure("Card.TCheckbutton",
+                         background=CARD, foreground=FG,
+                         indicatorcolor=CARD)
+        style.map("Card.TCheckbutton",
+                  background=[("active", CARD)],
+                  indicatorcolor=[("selected", CHECK_COLOR)])
+
+        # Scrollbar
+        style.configure("TScrollbar",
+                         background=SEC_BG, troughcolor=BG,
+                         bordercolor=BORDER, arrowcolor=FG,
+                         darkcolor=SEC_BG, lightcolor=SEC_BG)
+
+        # Notebook
+        style.configure("TNotebook", background=BG, bordercolor=BORDER)
+        style.configure("TNotebook.Tab",
+                         background=SEC_BG, foreground=FG, padding=(10, 4))
+        style.map("TNotebook.Tab",
+                  background=[("selected", CARD)],
+                  foreground=[("selected", ACCENT)])
+
+        # Labelframe ttk
+        style.configure("TLabelframe", background=CARD, bordercolor=BORDER)
+        style.configure("TLabelframe.Label", background=BG, foreground=FG,
+                         font=self._font(11, "bold"))
+
+        # Treeview
+        style.configure("Treeview",
+                         background=CARD, foreground=FG,
+                         fieldbackground=CARD, rowheight=22,
+                         bordercolor=BORDER)
+        style.configure("Treeview.Heading",
+                         background=SEC_BG, foreground=FG,
+                         relief="flat", bordercolor=BORDER)
+        style.map("Treeview",
+                  background=[("selected", ACCENT)],
+                  foreground=[("selected", "white")])
+        style.map("Treeview.Heading",
+                  background=[("active", SEC_ACT)])
+        try:
             self._res_tree.tag_configure("odd",  background=BG)
             self._res_tree.tag_configure("even", background=CARD)
         except Exception:
             pass
+
+        # Progressbar
+        style.configure("TProgressbar",
+                         troughcolor=BORDER, background=ACCENT, thickness=6)
 
     # ------------------------------------------------------------------
     # Navigation helpers
@@ -794,15 +1081,20 @@ class App(tk.Tk):
     def _show_search_page(self):
         self._results_page.pack_forget()
         self._search_page.pack(fill="both", expand=True)
-        # Active tab = white bg, inactive = transparent/accent
-        self._nav_search_btn.configure(bg=self._CARD, fg=self._ACCENT)
-        self._nav_results_btn.configure(bg=self._ACCENT, fg="white")
+        # Onglet actif : fond blanc/card + texte accent
+        # Onglet inactif : fond accent + texte blanc → lisible dans les deux thèmes
+        self._nav_search_btn.configure(bg=self._CARD, fg=self._ACCENT,
+                                       activebackground=self._ACCENT, activeforeground="white")
+        self._nav_results_btn.configure(bg=self._ACCENT, fg="white",
+                                        activebackground="#005BBB", activeforeground="white")
 
     def _show_results_page(self):
         self._search_page.pack_forget()
         self._results_page.pack(fill="both", expand=True)
-        self._nav_results_btn.configure(bg=self._CARD, fg=self._ACCENT)
-        self._nav_search_btn.configure(bg=self._ACCENT, fg="white")
+        self._nav_results_btn.configure(bg=self._CARD, fg=self._ACCENT,
+                                        activebackground=self._ACCENT, activeforeground="white")
+        self._nav_search_btn.configure(bg=self._ACCENT, fg="white",
+                                       activebackground="#005BBB", activeforeground="white")
 
     def _update_results_count(self, n: int):
         self._nav_results_var.set(f"📊 Résultats ({n})")
@@ -887,11 +1179,10 @@ class App(tk.Tk):
         self._dl_sel_var = tk.StringVar(value="💾 Télécharger la sélection (0)")
         self._dl_sel_btn = tk.Button(
             tb, textvariable=self._dl_sel_var,
-            relief="solid", cursor="hand2",
-            bg=self._T["BTN_SECONDARY_BG"], fg=self._T["BTN_SECONDARY_FG"],
-            highlightbackground=self._BORDER, highlightthickness=1,
-            activebackground=self._T["BTN_SECONDARY_ACT"], font=self._font(10),
-            padx=8, command=self._download_selection,
+            relief="flat", cursor="hand2",
+            bg=self._ACCENT, fg="white",
+            activebackground="#005BBB", activeforeground="white",
+            font=self._font(10), padx=8, command=self._download_selection,
         )
         self._dl_sel_btn.pack(side="right", padx=(4, 0))
 
@@ -918,9 +1209,9 @@ class App(tk.Tk):
         self._hide_dupes_btn = tk.Button(
             stat_bar, text="👁  Cacher les doublons du cache",
             relief="solid", cursor="hand2",
-            bg=self._T["BTN_SECONDARY_BG"], fg=self._T["BTN_SECONDARY_FG"],
+            bg=self._ACCENT, fg="white",
             highlightbackground=self._BORDER, highlightthickness=1,
-            activebackground=self._T["BTN_SECONDARY_ACT"],
+            activebackground="#005BBB", activeforeground="white",
             font=self._font(9), padx=10,
             command=self._toggle_hide_dupes,
         )
@@ -1032,17 +1323,13 @@ class App(tk.Tk):
                  bg=self._BG, fg=self._FG, font=self._font(10, "bold")).pack(side="left")
 
         tk.Button(hdr, text="✓ Tout sélectionner",
-                  bg=self._T["BTN_SECONDARY_BG"], fg=self._T["BTN_SECONDARY_FG"],
-                  relief="solid", cursor="hand2",
-                  highlightbackground=self._BORDER, highlightthickness=1,
-                  activebackground=self._T["BTN_SECONDARY_ACT"],
+                  bg=self._ACCENT, fg="white", relief="flat", cursor="hand2",
+                  activebackground="#005BBB", activeforeground="white",
                   font=self._font(9), padx=8,
                   command=self._select_all_cols).pack(side="right", padx=(4, 0))
         tk.Button(hdr, text="✗ Tout désélectionner",
-                  bg=self._T["BTN_SECONDARY_BG"], fg=self._T["BTN_SECONDARY_FG"],
-                  relief="solid", cursor="hand2",
-                  highlightbackground=self._BORDER, highlightthickness=1,
-                  activebackground=self._T["BTN_SECONDARY_ACT"],
+                  bg=self._ACCENT, fg="white", relief="flat", cursor="hand2",
+                  activebackground="#005BBB", activeforeground="white",
                   font=self._font(9), padx=8,
                   command=self._deselect_all_cols).pack(side="right", padx=(4, 0))
         tk.Button(hdr, text="★ Essentielles",
@@ -1247,7 +1534,7 @@ class App(tk.Tk):
             self._res_filtered = list(self._pending_rows)
             self._hide_dupes_btn.configure(
                 text="👁  Cacher les doublons du cache",
-                bg=self._T["BTN_SECONDARY_BG"], fg=self._T["BTN_SECONDARY_FG"],
+                bg=self._ACCENT, fg="white",
             )
             n = len(self._pending_rows)
             self._dl_all_var.set(f"💾 Télécharger tout ({n})")
@@ -1636,6 +1923,14 @@ class App(tk.Tk):
         hw_loc_e = ttk.Entry(c, textvariable=self.hw_location_var, width=22)
         hw_loc_e.pack(side="left")
         self._hw_widgets.append(hw_loc_e)
+        tk.Label(c, text="Rayon", bg=self._CARD, fg=self._FG,
+                 font=self._font(10)).pack(side="left", padx=(12, 4))
+        self.hw_rayon_var = tk.StringVar()
+        hw_ray_e = ttk.Entry(c, textvariable=self.hw_rayon_var, width=5)
+        hw_ray_e.pack(side="left")
+        self._hw_widgets.append(hw_ray_e)
+        tk.Label(c, text="km", bg=self._CARD, fg=self._FG_MUTED,
+                 font=self._font(9)).pack(side="left", padx=(2, 0))
 
         c = self._field_row(lf, "Publiée depuis")
         self.hw_date_var = tk.StringVar(value="Toutes dates")
@@ -1660,6 +1955,15 @@ class App(tk.Tk):
         hw_m_e = ttk.Entry(c, textvariable=self.hw_max_var, width=7)
         hw_m_e.pack(side="left")
         self._hw_widgets.append(hw_m_e)
+
+        c = self._field_row(lf, "Métiers/groupe", "si secteur : nb de métiers par run Apify")
+        self.hw_group_size_var = tk.StringVar(value="5")
+        hw_gs_e = ttk.Entry(c, textvariable=self.hw_group_size_var, width=4)
+        hw_gs_e.pack(side="left")
+        self._hw_widgets.append(hw_gs_e)
+        tk.Label(c, text="(1 run Apify par groupe — plus précis, plus lent)",
+                 bg=self._CARD, fg=self._FG_MUTED,
+                 font=self._font(9)).pack(side="left", padx=(8, 0))
 
         tk.Frame(lf, bg=self._CARD, height=6).pack()
 
@@ -1715,6 +2019,17 @@ class App(tk.Tk):
             style="Run.TButton", command=self._on_search,
         )
         self._run_btn.pack(side="left", padx=(0, 10))
+
+        # Bouton annuler (caché par défaut)
+        self._cancel_btn = tk.Button(
+            f, text="  ✖  Annuler la recherche  ",
+            bg="#FF3B30", fg="white",
+            activebackground="#CC2D24", activeforeground="white",
+            font=self._font(12, "bold"), relief="flat", cursor="hand2",
+            padx=20, pady=8,
+            command=self._on_cancel_search,
+        )
+        # Pas pack() ici — sera affiché dynamiquement
 
         self._add_btn = ttk.Button(
             f, text="  ➕  Ajouter aux résultats  ",
@@ -2004,6 +2319,11 @@ class App(tk.Tk):
                     self._ft_status_lbl.configure(text="✅ Connecté", fg="green")
                 elif kind == "hw_ok":
                     self._hw_status_lbl.configure(text="✅ Connecté", fg="green")
+                elif kind == "cancelled":
+                    self._progress.stop()
+                    self._set_ui_enabled(True)
+                    self._status_var.set("🛑  Recherche annulée.")
+                    self._log_msg("🛑  Recherche annulée.")
                 elif kind == "error":
                     self._progress.stop()
                     self._set_ui_enabled(True)
@@ -2032,6 +2352,11 @@ class App(tk.Tk):
             self._add_btn.configure(state="normal")
         else:
             self._add_btn.configure(state="disabled")
+
+        # Swap annuler → recherche quand l'UI redevient active
+        if enabled:
+            self._cancel_btn.pack_forget()
+            self._run_btn.pack(side="left", padx=(0, 10))
 
     # ------------------------------------------------------------------
     # Test buttons
@@ -2269,7 +2594,11 @@ class App(tk.Tk):
             self._add_btn.configure(state="disabled")
             self._update_results_count(0)
 
+        self._cancel_search = False  # reset du flag
         self._set_ui_enabled(False)
+        # Swap bouton recherche → annuler
+        self._run_btn.pack_forget()
+        self._cancel_btn.pack(side="left", padx=(0, 10))
         self._progress.start(12)
         self._status_var.set(
             "Recherche en cours…" if self._search_mode == "reset"
@@ -2304,6 +2633,12 @@ class App(tk.Tk):
         self._do_download(self._pending_rows,
                           label=f"{len(self._pending_rows)} offres")
 
+    def _on_cancel_search(self):
+        """Annule la recherche en cours."""
+        self._cancel_search = True
+        self._log_msg("🛑  Annulation demandée — arrêt de la recherche en cours...")
+        self._status_var.set("⚠️  Annulation en cours...")
+
     def _open_last_csv(self):
         if not self.last_output_path or not os.path.exists(self.last_output_path):
             messagebox.showinfo("Aucun fichier", "Aucun export disponible.")
@@ -2322,6 +2657,12 @@ class App(tk.Tk):
     def _worker_search(self, use_ft, use_hw, cid, secret, apify, ft_max, hw_max,
                        ft_checked=True, hw_checked=True):
         try:
+            # Check annulation dès le début
+            if self._cancel_search:
+                self._queue.put(("log", "🛑  Recherche annulée avant démarrage."))
+                self._queue.put(("search_done", None))
+                return
+
             all_rows: list[dict] = []
             post = self._get_post_filters()
 
@@ -2373,6 +2714,12 @@ class App(tk.Tk):
                 self._log(f"France Travail : {len(rows)} offres après filtres\n")
                 all_rows.extend(rows)
 
+            # Check annulation entre les deux sources
+            if self._cancel_search:
+                self._queue.put(("log", "🛑  Recherche annulée par l'utilisateur."))
+                self._queue.put(("search_done", None))
+                return
+
             if use_hw:
                 self._log("=== HelloWork (Apify) ===")
                 kw_raw = self.hw_keywords_var.get().strip()
@@ -2401,17 +2748,24 @@ class App(tk.Tk):
                                   if var.get()]
                 date_posted = HW_DATE_POSTED.get(self.hw_date_var.get(), "any")
                 location = self.hw_location_var.get().strip()
+                try:
+                    radius_km = int(self.hw_rayon_var.get().strip()) if self.hw_rayon_var.get().strip() else None
+                except ValueError:
+                    radius_km = None
+                rayon_log = f" +{radius_km}km" if radius_km else ""
                 self._log(f"Mots-clés : {keywords if keywords else '(aucun)'}")
-                self._log(f"Lieu : {location or '(tous)'} | Depuis : {self.hw_date_var.get()}")
+                self._log(f"Lieu : {location or '(tous)'}{rayon_log} | Depuis : {self.hw_date_var.get()}")
 
                 hw_rows = fetch_hellowork_offers(
                     apify,
                     search_queries=keywords,
                     location=location,
+                    radius_km=radius_km,
                     max_results=hw_max,
                     contract_types=contract_types or None,
                     date_posted=date_posted,
                     log=self._log,
+                    check_cancel=lambda: self._cancel_search,
                 )
                 post_kw = {k: v for k, v in post.items()
                            if k not in ("exclude_recruiters", "recruiter_threshold")}
@@ -2457,9 +2811,15 @@ class App(tk.Tk):
             self._queue.put(("search_done", (new_rows, ignored_ids)))
 
         except (FranceTravailError, HelloWorkError) as e:
-            self._queue.put(("error", str(e)))
+            if self._cancel_search:
+                self._queue.put(("cancelled", None))
+            else:
+                self._queue.put(("error", str(e)))
         except Exception as e:
-            self._queue.put(("error", f"Erreur inattendue : {e}"))
+            if self._cancel_search:
+                self._queue.put(("cancelled", None))
+            else:
+                self._queue.put(("error", f"Erreur inattendue : {e}"))
 
 
 # ---------------------------------------------------------------------------

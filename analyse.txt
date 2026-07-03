@@ -1,0 +1,82 @@
+Laisse-moi lire tout le code en profondeur avant de te donner un avis.
+
+J'ai tout lu en détail. Voilà mon analyse complète, sans filtre.
+
+---
+
+## Rapport d'analyse — Scrapa
+
+---
+
+### 🔴 Priorité haute — problèmes fonctionnels réels
+
+**1. HelloWork avec secteur = une seule requête Apify pour 20 mots-clés**
+Quand tu sélectionnes un secteur HW, les 20 métiers sont envoyés en une seule requête avec `searchQueries: ["maçon", "couvreur", ...]`. L'acteur Apify traite ça comme une recherche "maçon OU couvreur OU..." — ce n'est pas documenté et probablement pas fiable. La bonne approche serait de lancer une requête par métier ou par petits groupes, et agréger. En l'état tu peux recevoir des résultats partiels ou incohérents sans t'en rendre compte.
+
+**2. Le cache `seen_ids.json` est un fichier texte JSON qui grossit indéfiniment**
+Il n'y a pas de limite de taille, pas de date d'expiration, pas de rotation. Si tu utilises l'outil sur plusieurs mois, ce fichier peut contenir des dizaines de milliers d'IDs pour des annonces qui n'existent plus. Ça ralentit les lectures/écritures et prend de la place inutilement. Un TTL de 90 jours par exemple résoudrait ça.
+
+**3. `filter_new` est appelé deux fois à chaque "cacher les doublons"**
+Dans `_update_stat_bar` ET dans `_toggle_hide_dupes`, `filter_new` relit le fichier cache depuis le disque à chaque appel. Ça fait des I/O disque répétées pour un résultat identique. Avec un gros cache, ça peut devenir lent et se voit dans l'UI.
+
+**4. Le `FT_CONTRAT` dict en haut du fichier n'est plus utilisé nulle part**
+Il est défini mais jamais référencé. Code mort depuis une refonte. Idem pour `apify_id_dummy` dans le code des credentials — c'est un hack de nommage qui survit alors qu'il devrait juste être `None`.
+
+---
+
+### 🟠 Priorité moyenne — UX et robustesse
+
+**5. Aucune sauvegarde/restauration des paramètres de recherche**
+Chaque fois que tu lances l'app, tout est vide. Si tu as une recherche type que tu refais chaque semaine (même secteur, même ville, même contrat), tu retapes tout. Un simple bouton "Sauvegarder ce profil" / "Charger" avec stockage dans `.env` ou un fichier JSON serait très utile.
+
+**6. Le mode enrichi HelloWork (acteur `blackfalcondata`) est présent mais jamais exposé dans l'UI**
+La case à cocher enrichi existe dans la CLI (`hellowork_export.py`) mais pas dans le GUI. L'utilisateur n'a aucun moyen de l'activer depuis l'interface. Soit tu l'exposes, soit tu le supprimes de la lib pour éviter la confusion.
+
+**7. La barre de statut recalcule `filter_new` à chaque `_populate_tree`**
+Chaque tri, chaque frappe dans le filtre texte → relecture du cache disque. Ce calcul devrait être mis en cache en mémoire et rafraîchi seulement quand `_pending_rows` change.
+
+**8. Pas de feedback pendant une longue recherche HW**
+Apify peut prendre 2-5 minutes. La barre de progression tourne mais le log reste silencieux pendant tout le polling. L'utilisateur ne sait pas si c'est bloqué ou en cours. Le polling toutes les 3 secondes logge `Statut Apify : RUNNING (12s)` etc. — c'est verbeux mais c'est mieux que rien. Le vrai problème c'est qu'il n'y a pas de bouton "Annuler" — si l'app est lancée avec de mauvais paramètres tu dois la fermer.
+
+**9. La liste des villes INSEE est codée en dur et incomplète**
+50 villes. Des villes comme Montauban, Chambéry, Valence, Annecy, Bayonne ne sont pas dedans. Si un utilisateur tape une ville non répertoriée, elle est passée telle quelle à l'API ce qui échoue silencieusement. L'API FT expose un endpoint de référentiel communes — on pourrait l'interroger dynamiquement ou avoir une liste plus complète.
+
+**10. Pas de gestion du token expiré pendant une recherche**
+Le token France Travail expire après 1490 secondes (~25 min). Si une recherche avec beaucoup de villes prend du temps, le token peut expirer en milieu de route. Le code ne re-authentifie pas automatiquement, l'erreur est juste propagée en rouge.
+
+---
+
+### 🟡 Priorité basse — code et architecture
+
+**11. `france_travail_gui.py` fait ~2260 lignes dans une seule classe**
+Toute la logique UI, la logique métier, le threading, les callbacks et les builders sont dans `App`. C'est difficile à maintenir. Idéalement : séparer la couche "recherche/worker" de la couche "UI" dans des classes distinctes ou fichiers séparés.
+
+**12. Les fichiers de test (`test_*.py`) ne sont pas exécutables en l'état**
+`test_full.py`, `test_fusion.py` etc. sont présents mais pas dans les dépendances (`requirements.txt` ne référence pas pytest). Il n'y a pas de `pytest.ini` ni de structure de test cohérente. Soit on les intègre proprement, soit on les supprime — en l'état ils donnent une fausse impression de couverture.
+
+**13. Double code NAF "6201" dans le secteur Informatique**
+```python
+"6201", "6202", "6203", "6209",
+"6311", "6312",
+"6201", "7022",   # ← 6201 en double
+```
+Ça ne plante pas (l'API FT déduplique probablement), mais c'est une erreur silencieuse.
+
+**14. `flatten_standard_job` retourne des champs non présents dans `UNIFIED_FIELDNAMES`**
+`entreprise_logo`, `pays`, `type_contrat_libelle`, `salaire_devise`, `salaire_periode`, `qualifications`, `date_expiration`, `mots_cles_recherche` sont dans le dict mais absents de `UNIFIED_FIELDNAMES`. Ils sont silencieusement ignorés à l'export (`extrasaction="ignore"`). C'est intentionnel mais pas documenté — quelqu'un qui cherche pourquoi ses données salaire_devise n'apparaissent pas va chercher longtemps.
+
+**15. Le `README.md` décrit une interface à 5 onglets qui n'existe plus**
+Le README parle de "5 onglets" avec une organisation qui ne correspond plus à l'UI actuelle (navbar + 2 pages). Il devrait être mis à jour.
+
+---
+
+### 💡 Ce qui pourrait être supprimé
+
+- `france_travail_export.py` et `hellowork_export.py` — les CLI sont utiles pour l'automatisation mais vu que l'outil cible visiblement un usage GUI, ils peuvent être archivés ou juste maintenus en documentation
+- `FT_CONTRAT` dict (code mort)
+- Le mode enrichi HW si tu ne comptes pas l'exposer dans le GUI
+- Les fichiers `test_*.py` dans l'état actuel — ils encombrent sans apporter de valeur réelle
+
+---
+
+**En résumé**, les points 1, 2, 3 sont ceux qui peuvent te faire perdre du temps ou des données. Les points 5 (sauvegarde des profils) et 9 (villes manquantes) sont ceux qui amélioreraient le plus l'expérience au quotidien. Le reste c'est de la dette technique.

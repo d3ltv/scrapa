@@ -36,6 +36,7 @@ def build_standard_input(
     *,
     search_queries: list[str],
     location: str = "",
+    radius_km: Optional[int] = None,
     start_urls: list[str] | None = None,
     max_results: int = 100,
     contract_types: list[str] | None = None,
@@ -54,14 +55,13 @@ def build_standard_input(
     if search_queries:
         payload["searchQueries"] = search_queries
     elif location.strip():
-        # Pas de mots-clés mais un lieu : on passe une query vide pour que l'acteur
-        # renvoie toutes les offres du lieu dans la période demandée
         payload["searchQueries"] = [""]
     else:
-        # Ni mots-clés ni lieu : toutes les offres récentes
         payload["searchQueries"] = [""]
     if location.strip():
         payload["location"] = location.strip()
+    if radius_km is not None and radius_km > 0:
+        payload["radius"] = radius_km
     if start_urls:
         payload["startUrls"] = start_urls
     if min_salary is not None and min_salary > 0:
@@ -103,7 +103,7 @@ def _actor_slug(actor_id: str) -> str:
     return actor_id.replace("/", "~")
 
 
-def run_apify_actor(token: str, actor_id: str, actor_input: dict, log=print) -> list[dict]:
+def run_apify_actor(token: str, actor_id: str, actor_input: dict, log=print, check_cancel=None) -> list[dict]:
     slug = _actor_slug(actor_id)
     log(f"Lancement Apify ({actor_id})...")
 
@@ -124,6 +124,11 @@ def run_apify_actor(token: str, actor_id: str, actor_input: dict, log=print) -> 
     log(f"  Run Apify démarré : {run_id}")
     elapsed = 0
     while elapsed < MAX_WAIT:
+        # Check annulation
+        if check_cancel and check_cancel():
+            log("  🛑 Annulation détectée — abandon du polling Apify.")
+            raise HelloWorkError("Recherche annulée par l'utilisateur.")
+
         time.sleep(POLL_INTERVAL)
         elapsed += POLL_INTERVAL
 
@@ -275,6 +280,7 @@ def fetch_hellowork_offers(
     enriched_mode: bool = False,
     search_queries: list[str],
     location: str = "",
+    radius_km: Optional[int] = None,
     start_urls: list[str] | None = None,
     max_results: int = 100,
     contract_types: list[str] | None = None,
@@ -285,6 +291,7 @@ def fetch_hellowork_offers(
     include_job_details: bool = True,
     include_company_profile: bool = True,
     log=print,
+    check_cancel=None,
 ) -> list[dict]:
     if enriched_mode:
         actor_input = build_enriched_input(
@@ -302,6 +309,7 @@ def fetch_hellowork_offers(
         actor_input = build_standard_input(
             search_queries=search_queries,
             location=location,
+            radius_km=radius_km,
             start_urls=start_urls,
             max_results=max_results,
             contract_types=contract_types,
@@ -314,7 +322,7 @@ def fetch_hellowork_offers(
         flatten = flatten_standard_job
 
     log(f"Paramètres HelloWork : {actor_input}")
-    raw_jobs = run_apify_actor(token, actor_id, actor_input, log=log)
+    raw_jobs = run_apify_actor(token, actor_id, actor_input, log=log, check_cancel=check_cancel)
     return [flatten(j) for j in raw_jobs]
 
 
