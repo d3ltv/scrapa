@@ -783,13 +783,45 @@ class App(tk.Tk):
         style.configure("CardMuted.TLabel", background=CARD, foreground=FG_MUTED,
                         font=self._font(9))
         style.configure("Run.TButton", font=self._font(12, "bold"),
-                        foreground="white", background=ACCENT, padding=(20, 8))
+                        foreground="white", background=ACCENT, padding=(20, 8),
+                        relief="flat",
+                        bordercolor=ACCENT, darkcolor=ACCENT, lightcolor=ACCENT)
         style.map("Run.TButton",
-                  background=[("active", "#005BBB"), ("disabled", "#A0A0A0")],
-                  foreground=[("disabled", "#D0D0D0")])
-        style.configure("TButton", padding=(6, 4), background=T["BTN_SECONDARY_BG"],
-                        foreground=FG)
-        style.map("TButton", background=[("active", T["BTN_SECONDARY_ACT"])])
+                  background=[("disabled", "#A0A0A0"),
+                               ("pressed",  "#004499"),
+                               ("active",   "#005BBB"),
+                               ("!active",  ACCENT)],
+                  foreground=[("disabled", "#D0D0D0"),
+                               ("pressed",  "white"),
+                               ("active",   "white"),
+                               ("!active",  "white")])
+        # TButton : fond accent + texte blanc — tous états couverts pour macOS/clam
+        # Sur macOS avec le thème clam, ("!active", ...) est requis pour l'état normal
+        style.configure("TButton", padding=(6, 4), background=ACCENT,
+                        foreground="white", relief="flat",
+                        bordercolor=ACCENT, darkcolor=ACCENT, lightcolor=ACCENT,
+                        focusthickness=0, focuscolor=ACCENT)
+        style.map("TButton",
+                  background=[("disabled", "#A0A0A0"),
+                               ("pressed",  "#004499"),
+                               ("active",   "#005BBB"),
+                               ("!active",  ACCENT)],
+                  foreground=[("disabled", "#D0D0D0"),
+                               ("pressed",  "white"),
+                               ("active",   "white"),
+                               ("!active",  "white")],
+                  relief=[("pressed", "flat"), ("!pressed", "flat")])
+        # Variante secondaire (gris) pour les rares boutons non-accent
+        style.configure("Secondary.TButton", padding=(6, 4),
+                        background=T["BTN_SECONDARY_BG"], foreground=FG,
+                        relief="flat")
+        style.map("Secondary.TButton",
+                  background=[("disabled", "#A0A0A0"),
+                               ("active",   T["BTN_SECONDARY_ACT"]),
+                               ("!active",  T["BTN_SECONDARY_BG"])],
+                  foreground=[("disabled", "#D0D0D0"),
+                               ("active",   FG),
+                               ("!active",  FG)])
         style.configure("TEntry", fieldbackground=CARD, foreground=FG, padding=(6, 4))
         style.configure("TCombobox", fieldbackground=CARD, foreground=FG,
                         selectbackground=ACCENT, selectforeground="white", padding=(4, 3))
@@ -798,17 +830,40 @@ class App(tk.Tk):
                   foreground=[("readonly", FG)],
                   selectbackground=[("readonly", ACCENT)])
         style.configure("TCheckbutton", background=BG, foreground=FG)
+        style.map("TCheckbutton",
+                  background=[("active", BG)],
+                  foreground=[("active", FG)],
+                  indicatorcolor=[("selected", ACCENT), ("pressed", ACCENT)])
         style.configure("Card.TCheckbutton", background=CARD, foreground=FG)
+        style.map("Card.TCheckbutton",
+                  background=[("active", CARD)],
+                  indicatorcolor=[("selected", ACCENT)])
         style.configure("TSeparator", background=BORDER)
         style.configure("TProgressbar", troughcolor=BORDER, background=ACCENT, thickness=6)
         style.configure("TScrollbar", background=T["BTN_SECONDARY_BG"],
-                        troughcolor=BG, bordercolor=BORDER, arrowcolor=FG)
+                        troughcolor=BG, bordercolor=BORDER, arrowcolor=FG,
+                        darkcolor=T["BTN_SECONDARY_BG"], lightcolor=T["BTN_SECONDARY_BG"])
         style.configure("TNotebook", background=BG, bordercolor=BORDER)
         style.configure("TNotebook.Tab", background=T["BTN_SECONDARY_BG"],
                         foreground=FG, padding=(10, 4))
         style.map("TNotebook.Tab",
                   background=[("selected", CARD)],
                   foreground=[("selected", ACCENT)])
+        # Treeview
+        SEC_BG  = T["BTN_SECONDARY_BG"]
+        SEC_ACT = T["BTN_SECONDARY_ACT"]
+        style.configure("Treeview",
+                        background=CARD, foreground=FG,
+                        fieldbackground=CARD, rowheight=22,
+                        bordercolor=BORDER)
+        style.configure("Treeview.Heading",
+                        background=SEC_BG, foreground=FG,
+                        relief="flat", bordercolor=BORDER)
+        style.map("Treeview",
+                  background=[("selected", ACCENT)],
+                  foreground=[("selected", "white")])
+        style.map("Treeview.Heading",
+                  background=[("active", SEC_ACT)])
         style.configure("Tag.TFrame", background=T["TAG_BG"], relief="flat")
         style.configure("Tag.TLabel", background=T["TAG_BG"], foreground=T["TAG_FG"],
                         font=self._font(10))
@@ -1018,127 +1073,42 @@ class App(tk.Tk):
         # ── Boutons navbar — état selon page active ───────────────────
         # On détecte la page active et on réapplique les couleurs correctes
         try:
+            active_nav = None
             if self._search_page.winfo_ismapped():
-                self._nav_search_btn.configure(bg=CARD, fg=ACCENT,
-                                               activebackground=ACCENT, activeforeground="white")
-                self._nav_results_btn.configure(bg=ACCENT, fg="white",
-                                                activebackground="#005BBB", activeforeground="white")
-                self._nav_company_btn.configure(bg=ACCENT, fg="white",
-                                                activebackground="#005BBB", activeforeground="white")
+                active_nav = self._nav_search_btn
             elif self._results_page.winfo_ismapped():
-                self._nav_results_btn.configure(bg=CARD, fg=ACCENT,
-                                                activebackground=ACCENT, activeforeground="white")
-                self._nav_search_btn.configure(bg=ACCENT, fg="white",
-                                               activebackground="#005BBB", activeforeground="white")
-                self._nav_company_btn.configure(bg=ACCENT, fg="white",
-                                                activebackground="#005BBB", activeforeground="white")
+                active_nav = self._nav_results_btn
+            elif hasattr(self, "_archive_page") and self._archive_page.winfo_ismapped():
+                active_nav = self._nav_archive_btn
             else:
-                self._nav_company_btn.configure(bg=CARD, fg=ACCENT,
-                                                activebackground=ACCENT, activeforeground="white")
-                self._nav_search_btn.configure(bg=ACCENT, fg="white",
-                                               activebackground="#005BBB", activeforeground="white")
-                self._nav_results_btn.configure(bg=ACCENT, fg="white",
-                                                activebackground="#005BBB", activeforeground="white")
+                active_nav = self._nav_company_btn
+
+            all_nav = [self._nav_search_btn, self._nav_results_btn,
+                       self._nav_company_btn]
+            if hasattr(self, "_nav_archive_btn"):
+                all_nav.append(self._nav_archive_btn)
+
+            for btn in all_nav:
+                if btn is active_nav:
+                    btn.configure(bg=CARD, fg=ACCENT,
+                                  activebackground=ACCENT, activeforeground="white")
+                else:
+                    btn.configure(bg=ACCENT, fg="white",
+                                  activebackground="#005BBB", activeforeground="white")
         except Exception:
             pass
 
         # ── Forcer les styles ttk après la récursion ─────────────────
-        style = ttk.Style(self)
+        # _setup_style contient déjà toutes les définitions correctes (avec !active)
+        # On le rappelle simplement pour propager les nouvelles couleurs
+        self._setup_style()
 
-        # Entry
-        style.configure("TEntry",
-                         fieldbackground=CARD, foreground=FG,
-                         insertcolor=FG, selectbackground=ACCENT,
-                         selectforeground="white", bordercolor=BORDER)
-        style.map("TEntry",
-                  fieldbackground=[("disabled", BG), ("readonly", BG)],
-                  foreground=[("disabled", FG_MUTED)])
-
-        # Combobox
-        style.configure("TCombobox",
-                         fieldbackground=CARD, foreground=FG,
-                         selectbackground=ACCENT, selectforeground="white",
-                         arrowcolor=FG, bordercolor=BORDER)
-        style.map("TCombobox",
-                  fieldbackground=[("readonly", CARD), ("disabled", BG)],
-                  foreground=[("readonly", FG), ("disabled", FG_MUTED)],
-                  arrowcolor=[("disabled", FG_MUTED)])
-
-        # Button ttk
-        style.configure("TButton",
-                         background=ACCENT, foreground="white",
-                         bordercolor=ACCENT, darkcolor=ACCENT, lightcolor=ACCENT,
-                         relief="flat", padding=(6, 4))
-        style.map("TButton",
-                  background=[("active", "#005BBB"), ("disabled", "#A0A0A0")],
-                  foreground=[("disabled", "#D0D0D0")])
-
-        # Run button
-        style.configure("Run.TButton",
-                         background=ACCENT, foreground="white",
-                         font=self._font(12, "bold"), padding=(20, 8))
-        style.map("Run.TButton",
-                  background=[("active", SEC_ACT), ("disabled", "#A0A0A0")],
-                  foreground=[("disabled", "#D0D0D0")])
-
-        # Checkbutton ttk
-        CHECK_COLOR = "#30D158" if self._dark_mode else ACCENT
-        style.configure("TCheckbutton",
-                         background=BG, foreground=FG,
-                         indicatorcolor=CARD, indicatorrelief="flat")
-        style.map("TCheckbutton",
-                  background=[("active", BG)],
-                  foreground=[("active", FG)],
-                  indicatorcolor=[("selected", CHECK_COLOR), ("pressed", CHECK_COLOR)])
-
-        style.configure("Card.TCheckbutton",
-                         background=CARD, foreground=FG,
-                         indicatorcolor=CARD)
-        style.map("Card.TCheckbutton",
-                  background=[("active", CARD)],
-                  indicatorcolor=[("selected", CHECK_COLOR)])
-
-        # Scrollbar
-        style.configure("TScrollbar",
-                         background=SEC_BG, troughcolor=BG,
-                         bordercolor=BORDER, arrowcolor=FG,
-                         darkcolor=SEC_BG, lightcolor=SEC_BG)
-
-        # Notebook
-        style.configure("TNotebook", background=BG, bordercolor=BORDER)
-        style.configure("TNotebook.Tab",
-                         background=SEC_BG, foreground=FG, padding=(10, 4))
-        style.map("TNotebook.Tab",
-                  background=[("selected", CARD)],
-                  foreground=[("selected", ACCENT)])
-
-        # Labelframe ttk
-        style.configure("TLabelframe", background=CARD, bordercolor=BORDER)
-        style.configure("TLabelframe.Label", background=BG, foreground=FG,
-                         font=self._font(11, "bold"))
-
-        # Treeview
-        style.configure("Treeview",
-                         background=CARD, foreground=FG,
-                         fieldbackground=CARD, rowheight=22,
-                         bordercolor=BORDER)
-        style.configure("Treeview.Heading",
-                         background=SEC_BG, foreground=FG,
-                         relief="flat", bordercolor=BORDER)
-        style.map("Treeview",
-                  background=[("selected", ACCENT)],
-                  foreground=[("selected", "white")])
-        style.map("Treeview.Heading",
-                  background=[("active", SEC_ACT)])
+        # Treeview row tags (non gérés par ttk.Style)
         try:
             self._res_tree.tag_configure("odd",  background=BG)
             self._res_tree.tag_configure("even", background=CARD)
         except Exception:
             pass
-
-        # Progressbar
-        style.configure("TProgressbar",
-                         troughcolor=BORDER, background=ACCENT, thickness=6)
 
     # ------------------------------------------------------------------
     # Navigation helpers
@@ -3521,6 +3491,203 @@ class App(tk.Tk):
             self._queue.put(("cs_done", (None, f"Erreur HelloWork : {e}")))
         except Exception as e:
             self._queue.put(("cs_done", (None, f"Erreur inattendue : {e}")))
+
+    # ==================================================================
+    # Page Archives — historique des CSV exportés
+    # ==================================================================
+
+    def _build_archive_page(self):
+        """Construit la page listant tous les CSV archivés."""
+        page = tk.Frame(self._page_container, bg=self._BG)
+        self._archive_page = page
+
+        # ── En-tête ──────────────────────────────────────────────────
+        hdr = tk.Frame(page, bg=self._BG)
+        hdr.pack(fill="x", padx=14, pady=(10, 4))
+
+        tk.Label(hdr, text="📦 Historique des exports",
+                 bg=self._BG, fg=self._FG,
+                 font=self._font(14, "bold")).pack(side="left")
+
+        self._arc_stats_var = tk.StringVar(value="")
+        tk.Label(hdr, textvariable=self._arc_stats_var,
+                 bg=self._BG, fg=self._FG_MUTED,
+                 font=self._font(10)).pack(side="left", padx=16)
+
+        tk.Button(hdr, text="🔄 Actualiser",
+                  bg=self._ACCENT, fg="white", relief="flat", cursor="hand2",
+                  activebackground="#005BBB", font=self._font(10), padx=10,
+                  command=self._refresh_archive_list).pack(side="right")
+
+        # ── Tableau ───────────────────────────────────────────────────
+        tree_frame = tk.Frame(page, bg=self._BG)
+        tree_frame.pack(fill="both", expand=True, padx=14, pady=(0, 6))
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        arc_cols = [
+            ("archived_at",    "Date d'export",    150),
+            ("label",          "Type",              100),
+            ("count",          "Offres",             60),
+            ("original_path",  "Fichier original",  280),
+            ("exists",         "Archive dispo",      90),
+        ]
+        arc_col_keys = [c[0] for c in arc_cols]
+
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical")
+        hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
+        self._arc_tree = ttk.Treeview(
+            tree_frame,
+            columns=arc_col_keys,
+            show="headings",
+            selectmode="browse",
+            yscrollcommand=vsb.set,
+            xscrollcommand=hsb.set,
+        )
+        vsb.configure(command=self._arc_tree.yview)
+        hsb.configure(command=self._arc_tree.xview)
+
+        for key, label, width in arc_cols:
+            self._arc_tree.heading(key, text=label)
+            self._arc_tree.column(key, width=width, minwidth=50,
+                                  stretch=(key == "original_path"))
+
+        self._arc_tree.tag_configure("ok",      background="#F0FFF0")
+        self._arc_tree.tag_configure("missing", background="#FFF0F0")
+        self._arc_tree.tag_configure("ok_dark",      background="#1A2A1A")
+        self._arc_tree.tag_configure("missing_dark", background="#2A1A1A")
+
+        self._arc_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+
+        # ── Barre d'actions ───────────────────────────────────────────
+        act = tk.Frame(page, bg=self._BG)
+        act.pack(fill="x", padx=14, pady=(0, 10))
+
+        tk.Button(act, text="💾 Restaurer (Enregistrer sous…)",
+                  bg=self._ACCENT, fg="white", relief="flat", cursor="hand2",
+                  activebackground="#005BBB", font=self._font(10, "bold"), padx=12,
+                  command=self._arc_restore).pack(side="left", padx=(0, 8))
+
+        tk.Button(act, text="📂 Ouvrir le dossier archive",
+                  bg=self._ACCENT, fg="white", relief="flat", cursor="hand2",
+                  activebackground="#005BBB", font=self._font(10), padx=12,
+                  command=self._arc_open_folder).pack(side="left", padx=(0, 8))
+
+        self._arc_info_var = tk.StringVar(value="Sélectionne un export pour le restaurer.")
+        tk.Label(act, textvariable=self._arc_info_var,
+                 bg=self._BG, fg=self._FG_MUTED, font=self._font(9)).pack(side="left", padx=8)
+
+        # Stockage interne de la liste courante
+        self._arc_entries: list[dict] = []
+
+    def _refresh_archive_list(self):
+        """Recharge et affiche la liste des archives."""
+        try:
+            entries = list_archives()
+            stats   = get_archive_stats()
+        except Exception:
+            entries = []
+            stats   = {"total_exports": 0, "total_offers": 0, "size_kb": 0}
+
+        self._arc_entries = entries
+
+        self._arc_stats_var.set(
+            f"{stats['total_exports']} export(s)  •  "
+            f"{stats['total_offers']} offres  •  "
+            f"{stats['size_kb']} Ko"
+        )
+
+        tree = self._arc_tree
+        tree.delete(*tree.get_children())
+
+        if not entries:
+            self._arc_info_var.set("Aucun export archivé pour l'instant.")
+            return
+
+        for i, e in enumerate(entries):
+            dispo = "✅ oui" if e.get("exists") else "❌ manquant"
+            tag = ("ok" if e.get("exists") else "missing")
+            tree.insert("", "end", iid=str(i), tags=(tag,), values=(
+                e.get("archived_at", ""),
+                e.get("label", ""),
+                e.get("count", ""),
+                e.get("original_path", ""),
+                dispo,
+            ))
+
+        self._arc_info_var.set(
+            f"{len(entries)} export(s) archivé(s) — double-clic ou bouton Restaurer pour récupérer."
+        )
+
+        # Bind double-clic
+        try:
+            tree.bind("<Double-1>", self._arc_on_double_click)
+        except Exception:
+            pass
+
+    def _arc_selected_entry(self) -> dict | None:
+        """Retourne l'entrée d'archive sélectionnée, ou None."""
+        sel = self._arc_tree.selection()
+        if not sel:
+            return None
+        try:
+            idx = int(sel[0])
+            return self._arc_entries[idx]
+        except (ValueError, IndexError):
+            return None
+
+    def _arc_on_double_click(self, event):
+        self._arc_restore()
+
+    def _arc_restore(self):
+        """Copie l'archive sélectionnée vers un emplacement choisi par l'utilisateur."""
+        entry = self._arc_selected_entry()
+        if not entry:
+            messagebox.showinfo("Aucune sélection",
+                                "Sélectionne un export dans la liste.", parent=self)
+            return
+
+        if not entry.get("exists"):
+            messagebox.showerror("Fichier manquant",
+                                 f"Le fichier archivé est introuvable :\n{entry.get('archive_path')}",
+                                 parent=self)
+            return
+
+        # Suggestion de nom de fichier
+        orig = os.path.basename(entry.get("original_path") or entry.get("archive_file", "export.csv"))
+        default_name = orig if orig.endswith(".csv") else orig + ".csv"
+
+        dest = filedialog.asksaveasfilename(
+            title="Restaurer l'export vers…",
+            defaultextension=".csv",
+            initialfile=default_name,
+            filetypes=[("CSV", "*.csv")],
+            parent=self,
+        )
+        if not dest:
+            return
+
+        ok = restore_from_archive(entry["archive_file"], dest)
+        if ok:
+            self._arc_info_var.set(f"✅  Restauré → {dest}")
+            messagebox.showinfo("Restauration réussie",
+                                f"Export restauré :\n{dest}", parent=self)
+        else:
+            messagebox.showerror("Erreur",
+                                 "Impossible de restaurer le fichier.", parent=self)
+
+    def _arc_open_folder(self):
+        """Ouvre le dossier exports_archive dans le Finder / explorateur."""
+        from seen_ids_cache import ARCHIVE_DIR
+        os.makedirs(ARCHIVE_DIR, exist_ok=True)
+        if sys.platform == "darwin":
+            subprocess.run(["open", ARCHIVE_DIR], check=False)
+        elif sys.platform.startswith("win"):
+            os.startfile(ARCHIVE_DIR)  # noqa: S606
+        else:
+            subprocess.run(["xdg-open", ARCHIVE_DIR], check=False)
 
 
 # ---------------------------------------------------------------------------
