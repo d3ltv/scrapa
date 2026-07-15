@@ -1,7 +1,8 @@
 """
 recruiter_filter.py
 ====================
-Détecte et filtre les annonces postées par des cabinets de recrutement externes.
+Détecte et filtre les annonces postées par des cabinets de recrutement
+externes et des agences d'intérim / travail temporaire.
 """
 
 import re
@@ -84,6 +85,38 @@ COMPANY_NAME_PATTERNS = [
     r"\bapec\b",
     r"\bapec\s+recrutement\b",
 
+    # Agences d'intérim / travail temporaire
+    r"\btemporis\b",
+    r"\btriangle\s+(interim|intérim|solutions?|emploi)\b",
+    r"\bsamsic\s+(emploi|rh|interim|intérim)?\b",
+    r"\bgrafton\b",
+    r"\bdomino\s+(rh|staff|missions?|interim|intérim)?\b",
+    r"\bflexijob\b",
+    r"\bkelly\s*(services?|ocg)?\b",
+    r"\bolvea\b",
+    r"\bups\s+interim\b",
+    r"\bstart\s+(people|rh)\b",
+    r"\bipse\b",
+    r"\btalentpeople\b",
+    r"\binteractive\s+interim\b",
+    r"\bbis\s+interim\b",
+    r"\bbis\s+recrutement\b",
+    r"\boffice\s+depot\s+interim\b",
+    r"\bsolint\b",
+    r"\bforce\s+travail\b",
+    r"\bmooveus\b",
+    r"\beffectif\s+service\b",
+    r"\bmanpower\s+interim\b",
+    r"\bmission\s+locale\b",
+    r"\bemploi\s+intérim\b",
+    r"\bemploi\s+interim\b",
+    r"\bagence\s+intérim\b",
+    r"\bagence\s+interim\b",
+    r"\btravailleur[s]?\s+temporaire[s]?\b",
+    r"\bsté\s+(d'?interim|d'?intérim)\b",
+    r"\bsociété\s+(d'?interim|d'?intérim)\b",
+    r"\bcontrat\s+(d'?interim|d'?intérim)\b",
+
     # Cabinets spécialisés BTP / industrie fréquents
     r"\bbtp\s+recrutement\b",
     r"\brecrutement\s+btp\b",
@@ -153,6 +186,17 @@ DESCRIPTION_PATTERNS = [
     (r"cabinet\s+spécialisé", 2),
     (r"agence\s+(d[e']?\s+)?recrutement\b", 2),
     (r"agence\s+d[''']emploi\b", 2),
+    # Formulations typiques intérim
+    (r"mission\s+(d[''']?|en\s+)(intérim|interim)\b", 2),
+    (r"poste\s+en\s+(intérim|interim)\b", 2),
+    (r"agence\s+(d[''']?|de\s+)(travail\s+temporaire|intérim|interim)\b", 2),
+    (r"contrat\s+(d[''']?)(intérim|interim)\b", 2),
+    (r"contrat\s+de\s+travail\s+temporaire\b", 2),
+    (r"travailleur[s]?\s+temporaire[s]?\b", 1),
+    (r"mise\s+à\s+disposition\b", 1),
+    (r"entreprise\s+de\s+travail\s+temporaire\b", 2),
+    (r"ETT\b", 1),
+    (r"soci[ée]t[ée]\s+(d[''']|de\s+)(travail\s+temporaire|interim|intérim)\b", 2),
 ]
 
 # URL de sites connus de cabinets
@@ -163,6 +207,13 @@ RECRUITER_URL_DOMAINS = {
     "synergie.fr", "proman.com", "gi-group.fr", "crit.fr",
     "adequat.com", "partnaire.fr", "sofitex.fr",
     "actua.fr", "joblink.fr", "apec.fr",
+    # Agences d'intérim supplémentaires
+    "temporis.fr", "triangle-interim.fr", "samsic-emploi.fr",
+    "grafton.fr", "domino-rh.com", "startpeople.fr",
+    "kellyservices.fr", "kelly.fr", "flexijob.fr",
+    "bis-interim.fr", "solint.fr", "force-travail.fr",
+    "interaction-interim.fr", "appel-interim.fr",
+    "welljob.com", "jubil-interim.com", "rh-solutions.fr",
 }
 
 # ---------------------------------------------------------------------------
@@ -175,8 +226,8 @@ _DESC_RE    = [(re.compile(p, re.IGNORECASE), score) for p, score in DESCRIPTION
 
 def _score_row(row: dict) -> tuple[int, list[str]]:
     """
-    Score de suspicion cabinet.
-    Score ≥ 2 → cabinet probable (seuil défaut)
+    Score de suspicion cabinet / agence d'intérim.
+    Score ≥ 2 → intermédiaire RH probable (seuil défaut)
     """
     reasons: list[str] = []
     score = 0
@@ -214,7 +265,8 @@ def _score_row(row: dict) -> tuple[int, list[str]]:
 
 def is_recruiter(row: dict, threshold: int = 2) -> bool:
     """
-    Retourne True si l'annonce semble provenir d'un cabinet de recrutement.
+    Retourne True si l'annonce semble provenir d'un cabinet de recrutement
+    ou d'une agence d'intérim / travail temporaire.
     threshold=1 → très agressif (peu de faux négatifs, plus de faux positifs)
     threshold=2 → équilibré (défaut)
     threshold=3 → conservateur (seulement les cas certains)
@@ -229,7 +281,8 @@ def filter_out_recruiters(
     log=None,
 ) -> tuple[list[dict], list[dict]]:
     """
-    Sépare les annonces en (offres_directes, cabinets_détectés).
+    Sépare les annonces en (offres_directes, intermédiaires_détectés).
+    Filtre à la fois les cabinets de recrutement et les agences d'intérim.
     log : fonction de logging optionnelle.
     """
     direct: list[dict] = []
@@ -241,7 +294,7 @@ def filter_out_recruiters(
             recruiters.append(row)
             if log:
                 company = row.get("entreprise") or "(sans nom)"
-                log(f"  🚫 Cabinet évincé : {company}  [{', '.join(reasons[:2])}]")
+                log(f"  🚫 Intermédiaire RH évincé : {company}  [{', '.join(reasons[:2])}]")
         else:
             direct.append(row)
 

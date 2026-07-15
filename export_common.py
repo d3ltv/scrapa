@@ -3,6 +3,22 @@
 import csv
 import re
 from typing import Callable, Optional
+from urllib.parse import quote
+
+
+def build_maps_url(entreprise: str | None, ville: str | None) -> str:
+    """
+    Construit un lien Google Maps pour rechercher une entreprise dans une ville.
+    Retourne une chaîne vide si l'un ou l'autre des paramètres est absent ou vide.
+    Les caractères spéciaux (accents, apostrophes, espaces, etc.) sont encodés proprement.
+    """
+    nom = (entreprise or "").strip()
+    loc = (ville or "").strip()
+    if not nom or not loc:
+        return ""
+    query = f"{nom} {loc}"
+    encoded = quote(query, safe="")
+    return f"https://www.google.com/maps/search/?api=1&query={encoded}"
 
 
 def matches_regex(text: str, pattern: str) -> bool:

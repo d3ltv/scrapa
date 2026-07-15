@@ -10,6 +10,7 @@ import re
 import time
 import unicodedata
 import requests
+from export_common import build_maps_url
 
 TOKEN_URL = "https://entreprise.pole-emploi.fr/connexion/oauth2/access_token?realm=%2Fpartenaire"
 SEARCH_URL = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search"
@@ -180,13 +181,15 @@ def flatten_offer(offer: dict) -> dict:
     salaire = offer.get("salaire") or {}
     contact = offer.get("contact") or {}
 
+    nom_entreprise = entreprise.get("nom")
+    ville_libelle = lieu.get("libelle")
     return {
         "id": offer.get("id"),
         "intitule": offer.get("intitule"),
-        "entreprise": entreprise.get("nom"),
+        "entreprise": nom_entreprise,
         "entreprise_description": (entreprise.get("description") or "")[:300],
         "secteur_activite": offer.get("secteurActiviteLibelle"),
-        "ville": lieu.get("libelle"),
+        "ville": ville_libelle,
         "code_postal": lieu.get("codePostal"),
         "departement": (lieu.get("codePostal") or "")[:2],
         "type_contrat": offer.get("typeContrat"),
@@ -201,6 +204,7 @@ def flatten_offer(offer: dict) -> dict:
         "url_origine": (offer.get("origineOffre") or {}).get("urlOrigine"),
         "contact_nom": contact.get("nom"),
         "contact_email": contact.get("courriel"),
+        "lien_maps": build_maps_url(nom_entreprise, ville_libelle),
     }
 
 
@@ -231,6 +235,7 @@ def flatten_offer_unified(offer: dict) -> dict:
         "date_publication": row["date_creation"],
         "description": row["description"],
         "url": row["url_origine"],
+        "lien_maps": row["lien_maps"],
     }
 
 

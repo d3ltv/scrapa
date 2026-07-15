@@ -5,6 +5,7 @@ import os
 import sys
 import subprocess
 import threading
+import time
 import queue
 import webbrowser
 from datetime import datetime
@@ -27,9 +28,18 @@ from france_travail_lib import (
 from hellowork_lib import (
     verify_apify_token, fetch_hellowork_offers,
     HelloWorkError, UNIFIED_FIELDNAMES as HW_UNIFIED_FIELDNAMES,
+    resolve_hw_location,
 )
-from seen_ids_cache import filter_new, commit_rows, get_stats, clear_cache, load_seen_ids, get_row_id
+from seen_ids_cache import filter_new, commit_rows, get_stats, clear_cache, load_seen_ids, get_row_id, archive_csv, list_archives, restore_from_archive, get_archive_stats
 from recruiter_filter import filter_out_recruiters
+from company_search import (
+    load_company_names as cs_load_company_names,
+    list_csv_columns as cs_list_csv_columns,
+    OUTPUT_FIELDNAMES as CS_OUTPUT_FIELDNAMES,
+    BATCH_SIZE as CS_BATCH_SIZE,
+    DELAY_BETWEEN_CALLS as CS_DELAY_BETWEEN_CALLS,
+    DELAY_BETWEEN_BATCHES as CS_DELAY_BETWEEN_BATCHES,
+)
 
 
 def ftl_flatten_for_dedup(offer: dict) -> dict:
@@ -469,6 +479,7 @@ SECTEUR_CHOICES = ["(aucun)"] + sorted(SECTEURS.keys())
 # Colonnes du tableau résultats
 COLUMNS = [
     ("url",             "Lien",          180),
+    ("lien_maps",       "📍 Maps",        160),
     ("source",          "Source",         80),
     ("intitule",        "Poste",         200),
     ("entreprise",      "Entreprise",    160),
@@ -863,13 +874,35 @@ class App(tk.Tk):
         )
         self._nav_results_btn.pack(side="left", padx=(0, 4))
 
+        self._nav_company_btn = tk.Button(
+            nav_mid, text="🏢 Entreprises",
+            relief="flat", cursor="hand2", padx=14, pady=4,
+            font=self._font(11, "bold"),
+            bg=self._ACCENT, fg="white",
+            activebackground="#005BBB", activeforeground="white",
+            command=self._show_company_page,
+        )
+        self._nav_company_btn.pack(side="left", padx=(0, 4))
+
+        self._nav_archive_btn = tk.Button(
+            nav_mid, text="📦 Archives",
+            relief="flat", cursor="hand2", padx=14, pady=4,
+            font=self._font(11, "bold"),
+            bg=self._ACCENT, fg="white",
+            activebackground="#005BBB", activeforeground="white",
+            command=self._show_archive_page,
+        )
+        self._nav_archive_btn.pack(side="left", padx=(0, 4))
+
         # ── Page container ───────────────────────────────────────────
         self._page_container = tk.Frame(self, bg=self._BG)
         self._page_container.pack(fill="both", expand=True)
 
-        # Build both pages
+        # Build all pages
         self._build_search_page()
         self._build_results_page()
+        self._build_company_page()
+        self._build_archive_page()
 
         # Start on search page
         self._show_search_page()
@@ -990,11 +1023,22 @@ class App(tk.Tk):
                                                activebackground=ACCENT, activeforeground="white")
                 self._nav_results_btn.configure(bg=ACCENT, fg="white",
                                                 activebackground="#005BBB", activeforeground="white")
-            else:
+                self._nav_company_btn.configure(bg=ACCENT, fg="white",
+                                                activebackground="#005BBB", activeforeground="white")
+            elif self._results_page.winfo_ismapped():
                 self._nav_results_btn.configure(bg=CARD, fg=ACCENT,
                                                 activebackground=ACCENT, activeforeground="white")
                 self._nav_search_btn.configure(bg=ACCENT, fg="white",
                                                activebackground="#005BBB", activeforeground="white")
+                self._nav_company_btn.configure(bg=ACCENT, fg="white",
+                                                activebackground="#005BBB", activeforeground="white")
+            else:
+                self._nav_company_btn.configure(bg=CARD, fg=ACCENT,
+                                                activebackground=ACCENT, activeforeground="white")
+                self._nav_search_btn.configure(bg=ACCENT, fg="white",
+                                               activebackground="#005BBB", activeforeground="white")
+                self._nav_results_btn.configure(bg=ACCENT, fg="white",
+                                                activebackground="#005BBB", activeforeground="white")
         except Exception:
             pass
 
@@ -1100,23 +1144,53 @@ class App(tk.Tk):
     # Navigation helpers
     # ------------------------------------------------------------------
 
+    def _hide_all_pages(self):
+        for page in (self._search_page, self._results_page):
+            try:
+                page.pack_forget()
+            except Exception:
+                pass
+        try:
+            self._company_page.pack_forget()
+        except Exception:
+            pass
+        try:
+            self._archive_page.pack_forget()
+        except Exception:
+            pass
+        # Reset all nav buttons to inactive style
+        for btn in (self._nav_search_btn, self._nav_results_btn,
+                    self._nav_company_btn, self._nav_archive_btn):
+            try:
+                btn.configure(bg=self._ACCENT, fg="white",
+                               activebackground="#005BBB", activeforeground="white")
+            except Exception:
+                pass
+
     def _show_search_page(self):
-        self._results_page.pack_forget()
+        self._hide_all_pages()
         self._search_page.pack(fill="both", expand=True)
-        # Onglet actif : fond blanc/card + texte accent
-        # Onglet inactif : fond accent + texte blanc → lisible dans les deux thèmes
         self._nav_search_btn.configure(bg=self._CARD, fg=self._ACCENT,
                                        activebackground=self._ACCENT, activeforeground="white")
-        self._nav_results_btn.configure(bg=self._ACCENT, fg="white",
-                                        activebackground="#005BBB", activeforeground="white")
 
     def _show_results_page(self):
-        self._search_page.pack_forget()
+        self._hide_all_pages()
         self._results_page.pack(fill="both", expand=True)
         self._nav_results_btn.configure(bg=self._CARD, fg=self._ACCENT,
                                         activebackground=self._ACCENT, activeforeground="white")
-        self._nav_search_btn.configure(bg=self._ACCENT, fg="white",
-                                       activebackground="#005BBB", activeforeground="white")
+
+    def _show_company_page(self):
+        self._hide_all_pages()
+        self._company_page.pack(fill="both", expand=True)
+        self._nav_company_btn.configure(bg=self._CARD, fg=self._ACCENT,
+                                        activebackground=self._ACCENT, activeforeground="white")
+
+    def _show_archive_page(self):
+        self._hide_all_pages()
+        self._archive_page.pack(fill="both", expand=True)
+        self._nav_archive_btn.configure(bg=self._CARD, fg=self._ACCENT,
+                                        activebackground=self._ACCENT, activeforeground="white")
+        self._refresh_archive_list()
 
     def _update_results_count(self, n: int):
         self._nav_results_var.set(f"📊 Résultats ({n})")
@@ -1313,6 +1387,7 @@ class App(tk.Tk):
         self._col_vars: dict[str, tk.BooleanVar] = {}
         LABELS = {
             "url":              "Lien (URL)",
+            "lien_maps":        "📍 Lien Google Maps",
             "source":           "Source (FT / HW)",
             "id":               "ID offre",
             "intitule":         "Intitulé du poste",
@@ -1655,7 +1730,19 @@ class App(tk.Tk):
         vals = self._res_tree.item(item, "values")
         if not vals:
             return
-        url = vals[0]
+        # Détecte la colonne cliquée pour ouvrir le bon lien
+        col_id = self._res_tree.identify_column(event.x)  # ex: "#1", "#2"…
+        try:
+            col_index = int(col_id.lstrip("#")) - 1
+            clicked_key = COL_KEYS[col_index] if 0 <= col_index < len(COL_KEYS) else None
+        except (ValueError, IndexError):
+            clicked_key = None
+
+        if clicked_key == "lien_maps":
+            url = vals[COL_KEYS.index("lien_maps")]
+        else:
+            url = vals[COL_KEYS.index("url")]
+
         if url and url.startswith("http"):
             webbrowser.open(url)
 
@@ -1710,37 +1797,7 @@ class App(tk.Tk):
         if not rows:
             return
 
-        # ── Vérification finale anti-doublons ──────────────────────────────
-        # Re-filtre contre le cache au moment du téléchargement, pas à la recherche.
-        # Couvre le cas où le cache aurait changé entre la recherche et le DL
-        # (ex: deux sessions en parallèle, ou téléchargements partiels successifs).
-        clean_rows, skipped = filter_new(rows)
-
-        if skipped:
-            self._log_msg(
-                f"⚠️  {skipped} offre(s) déjà dans le cache supprimée(s) avant export."
-            )
-
-        if not clean_rows:
-            messagebox.showinfo(
-                "Rien à exporter",
-                f"Toutes les offres sélectionnées ({len(rows)}) sont déjà dans le cache.\n"
-                "Aucun fichier créé.",
-                parent=self,
-            )
-            return
-
-        if skipped:
-            # Demander confirmation si on a retiré des lignes
-            if not messagebox.askyesno(
-                "Doublons supprimés",
-                f"{skipped} offre(s) déjà exportée(s) ont été retirées.\n"
-                f"Il reste {len(clean_rows)} offre(s) à télécharger.\n\n"
-                "Continuer ?",
-                parent=self,
-            ):
-                return
-
+        # ── Choix du fichier d'abord ────────────────────────────────────────
         default_name = f"offres_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         output_path = filedialog.asksaveasfilename(
             title=f"Enregistrer — {label}",
@@ -1752,11 +1809,13 @@ class App(tk.Tk):
         if not output_path:
             return
 
-        count = export_csv_rows(clean_rows, output_path, fieldnames=self._get_selected_columns())
-        commit_rows(clean_rows)
+        count = export_csv_rows(rows, output_path, fieldnames=self._get_selected_columns())
+        # Commit dans le cache + archivage pour récupération future
+        commit_rows(rows)
+        archive_csv(output_path, rows, label="offres")
 
-        # Retire toutes les rows téléchargées de la mémoire (via get_row_id pour les sans-ID)
-        dl_keys = {get_row_id(r) for r in clean_rows}
+        # Retire les rows téléchargées de la mémoire
+        dl_keys = {get_row_id(r) for r in rows}
         self._pending_rows = [r for r in self._pending_rows if get_row_id(r) not in dl_keys]
         self._res_filtered  = [r for r in self._res_filtered  if get_row_id(r) not in dl_keys]
 
@@ -1764,16 +1823,12 @@ class App(tk.Tk):
         self._open_btn.configure(state="normal")
         self._status_var.set(f"✅  {count} offres exportées  —  {output_path}")
         self._log_msg(f"💾 {count} offres enregistrées → {output_path}")
-        if skipped:
-            self._log_msg(f"   ({skipped} doublon(s) supprimé(s) avant export)")
         self._update_results_count(len(self._pending_rows))
         self._dl_all_var.set(f"💾 Télécharger tout ({len(self._pending_rows)})")
         self._populate_tree(self._res_filtered)
         messagebox.showinfo(
             "Export terminé",
-            f"{count} offres enregistrées."
-            + (f"\n{skipped} doublon(s) ignoré(s)." if skipped else "")
-            + "\nIDs mémorisés dans le cache.",
+            f"{count} offres enregistrées.\nIDs mémorisés dans le cache.",
             parent=self,
         )
 
@@ -1940,7 +1995,7 @@ class App(tk.Tk):
         self._hw_secteur_info.pack(side="left")
         hw_sect_cb.bind("<<ComboboxSelected>>", self._on_hw_secteur_change)
 
-        c = self._field_row(lf, "Lieu", "Tours, Lyon, Île-de-France…")
+        c = self._field_row(lf, "Lieu", "Tours, Lyon, 37, 37000…")
         self.hw_location_var = tk.StringVar()
         hw_loc_e = ttk.Entry(c, textvariable=self.hw_location_var, width=22)
         hw_loc_e.pack(side="left")
@@ -2004,11 +2059,11 @@ class App(tk.Tk):
         self.post_sector_var = tk.StringVar()
         ttk.Entry(c, textvariable=self.post_sector_var, width=30).pack(side="left")
 
-        # Filtre cabinets de recrutement
-        c = self._field_row(lf, "Cabinets externes", "évince les chasseurs de têtes")
+        # Filtre cabinets de recrutement et agences d'intérim
+        c = self._field_row(lf, "Intermédiaires RH", "évince cabinets de recrutement et agences d'intérim")
         self.filter_recruiters_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
-            c, text="Exclure les cabinets de recrutement",
+            c, text="Exclure cabinets de recrutement et agences d'intérim",
             variable=self.filter_recruiters_var,
             bg=self._CARD, fg=self._FG,
             activebackground=self._CARD, selectcolor=self._CARD,
@@ -2338,9 +2393,9 @@ class App(tk.Tk):
                             self._update_results_count(0)
                             self._status_var.set("Aucune nouvelle offre trouvée.")
                 elif kind == "ft_ok":
-                    self._ft_status_lbl.configure(text="✅ Connecté", fg="green")
+                    self._ft_status_lbl.configure(text="✅ Connecté", foreground="green")
                 elif kind == "hw_ok":
-                    self._hw_status_lbl.configure(text="✅ Connecté", fg="green")
+                    self._hw_status_lbl.configure(text="✅ Connecté", foreground="green")
                 elif kind == "cancelled":
                     self._progress.stop()
                     self._set_ui_enabled(True)
@@ -2384,12 +2439,35 @@ class App(tk.Tk):
                     if hasattr(self, "_ft_status_lbl"):
                         current = self._ft_status_lbl.cget("text")
                         if current == "Test…":
-                            self._ft_status_lbl.configure(text="", fg=self._FG_MUTED)
+                            self._ft_status_lbl.configure(text="", foreground=self._FG_MUTED)
                     if hasattr(self, "_hw_status_lbl"):
                         current = self._hw_status_lbl.cget("text")
                         if current == "Test…":
-                            self._hw_status_lbl.configure(text="", fg=self._FG_MUTED)
+                            self._hw_status_lbl.configure(text="", foreground=self._FG_MUTED)
                     messagebox.showerror("Erreur", payload)
+                elif kind == "cs_log":
+                    # Log page entreprises
+                    try:
+                        self._cs_log_text.configure(state="normal")
+                        self._cs_log_text.insert("end", payload + "\n")
+                        self._cs_log_text.see("end")
+                        self._cs_log_text.configure(state="disabled")
+                    except Exception:
+                        pass
+                elif kind == "cs_done":
+                    # Fin recherche entreprises
+                    try:
+                        self._cs_progress.stop()
+                        output_path, msg = payload
+                        self._cs_status_var.set(msg)
+                        self._cs_cancel_btn.pack_forget()
+                        self._cs_run_btn.configure(state="normal")
+                        self._cs_run_btn.pack(side="left", padx=(0, 10))
+                        if output_path:
+                            self._cs_last_output = output_path
+                            self._cs_open_btn.configure(state="normal")
+                    except Exception:
+                        pass
         except queue.Empty:
             pass
         self.after(100, self._poll_queue)
@@ -2555,7 +2633,7 @@ class App(tk.Tk):
         threshold = post.get("recruiter_threshold", 2)
         direct, evicted = filter_out_recruiters(rows, threshold=threshold, log=self._log)
         if evicted:
-            self._log(f"  🚫 {len(evicted)} cabinet(s) évincé(s) sur {len(rows)} offres")
+            self._log(f"  🚫 {len(evicted)} intermédiaire(s) RH évincé(s) sur {len(rows)} offres")
         return direct
 
     def _get_post_filters(self) -> dict:
@@ -2807,6 +2885,9 @@ class App(tk.Tk):
                                   if var.get()]
                 date_posted = HW_DATE_POSTED.get(self.hw_date_var.get(), "any")
                 location = self.hw_location_var.get().strip()
+                location, loc_resolved = resolve_hw_location(location)
+                if loc_resolved:
+                    self._log(f"  📍 Département détecté → recherche sur : {location}")
                 try:
                     radius_km = int(self.hw_rayon_var.get().strip()) if self.hw_rayon_var.get().strip() else None
                 except ValueError:
@@ -2945,6 +3026,501 @@ class App(tk.Tk):
                 self._queue.put(("cancelled", None))
             else:
                 self._queue.put(("error", f"Erreur inattendue : {e}"))
+
+    # ==================================================================
+    # PAGE 3 — Recherche par liste d'entreprises
+    # ==================================================================
+
+    def _build_company_page(self):
+        """Page dédiée à la recherche d'offres par liste d'entreprises (CSV)."""
+        page = tk.Frame(self._page_container, bg=self._BG)
+        self._company_page = page
+
+        # Scrollable canvas
+        canvas = tk.Canvas(page, highlightthickness=0, bg=self._BG)
+        vsb = ttk.Scrollbar(page, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        sf = ttk.Frame(canvas, style="TFrame")
+        _win = canvas.create_window((0, 0), window=sf, anchor="nw")
+        sf.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(_win, width=e.width))
+        canvas.bind_all(
+            "<MouseWheel>",
+            lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"),
+            add="+",
+        )
+
+        # ── Titre ─────────────────────────────────────────────────────
+        hdr = tk.Frame(sf, bg=self._BG, pady=10)
+        hdr.pack(fill="x", padx=16)
+        tk.Label(hdr, text="🏢  Recherche par liste d'entreprises",
+                 bg=self._BG, fg=self._FG, font=self._font(15, "bold")).pack(side="left")
+        tk.Label(hdr,
+                 text="Importe un CSV d'entreprises et trouve toutes leurs offres en cours",
+                 bg=self._BG, fg=self._FG_MUTED, font=self._font(10)).pack(
+                     side="left", padx=(14, 0))
+
+        # ── Card 1 : Fichier CSV ──────────────────────────────────────
+        c1 = tk.LabelFrame(sf, text="  📂  Fichier CSV d'entreprises  ",
+                           bg=self._CARD, fg=self._FG,
+                           font=self._font(11, "bold"),
+                           relief="flat", bd=1,
+                           highlightbackground=self._BORDER, highlightthickness=1,
+                           padx=0, pady=6)
+        c1.pack(fill="x", padx=16, pady=(0, 6))
+
+        # ── Ligne 1 : sélection du fichier ───────────────────────────
+        row1 = tk.Frame(c1, bg=self._CARD)
+        row1.pack(fill="x", padx=12, pady=(8, 4))
+        tk.Label(row1, text="Fichier CSV :", bg=self._CARD, fg=self._FG,
+                 width=16, anchor="e", font=self._font(10)).pack(side="left", padx=(0, 8))
+
+        self._cs_path_var = tk.StringVar()
+        path_entry = ttk.Entry(row1, textvariable=self._cs_path_var, width=46)
+        path_entry.pack(side="left", padx=(0, 6))
+
+        def browse_csv():
+            path = filedialog.askopenfilename(
+                title="Choisir le CSV d'entreprises",
+                filetypes=[("CSV", "*.csv"), ("Tous", "*.*")],
+            )
+            if path:
+                self._cs_path_var.set(path)
+                self._cs_refresh_columns(auto_open=True)
+
+        ttk.Button(row1, text="📂  Parcourir…", command=browse_csv).pack(side="left")
+
+        # ── Ligne 2 : choix de la colonne ─────────────────────────────
+        row2 = tk.Frame(c1, bg=self._CARD)
+        row2.pack(fill="x", padx=12, pady=(0, 8))
+
+        tk.Label(row2, text="Colonne entreprise :", bg=self._CARD, fg=self._FG,
+                 width=16, anchor="e", font=self._font(10)).pack(side="left", padx=(0, 8))
+
+        self._cs_col_var = tk.StringVar(value="— chargez un CSV —")
+        self._cs_col_combo = ttk.Combobox(
+            row2, textvariable=self._cs_col_var,
+            state="readonly", width=34,
+            font=self._font(10),
+        )
+        self._cs_col_combo.pack(side="left", padx=(0, 10))
+
+        self._cs_count_lbl = tk.Label(
+            row2, text="", bg=self._CARD, fg=self._FG_MUTED, font=self._font(9),
+        )
+        self._cs_count_lbl.pack(side="left")
+
+        # ── Card 2 : Filtres optionnels ───────────────────────────────
+        c2 = tk.LabelFrame(sf, text="  ⚙️  Filtres optionnels  ",
+                           bg=self._CARD, fg=self._FG,
+                           font=self._font(11, "bold"),
+                           relief="flat", bd=1,
+                           highlightbackground=self._BORDER, highlightthickness=1,
+                           padx=0, pady=6)
+        c2.pack(fill="x", padx=16, pady=(0, 6))
+
+        def _opt_row(label, widget_factory):
+            r = tk.Frame(c2, bg=self._CARD)
+            r.pack(fill="x", padx=12, pady=3)
+            tk.Label(r, text=label, bg=self._CARD, fg=self._FG,
+                     width=20, anchor="e", font=self._font(10)).pack(side="left", padx=(0, 8))
+            w = widget_factory(r)
+            w.pack(side="left")
+            return w
+
+        self._cs_contrat_var = tk.StringVar(value="(tous)")
+        _opt_row("Type contrat :",
+                 lambda p: ttk.Combobox(p, textvariable=self._cs_contrat_var,
+                                        values=["(tous)", "CDI", "CDD", "ALTERNANCE",
+                                                "STAGE", "INTERIM", "FREELANCE"],
+                                        state="readonly", width=14))
+
+        self._cs_jours_var = tk.StringVar(value="(toutes dates)")
+        _opt_row("Publiée depuis :",
+                 lambda p: ttk.Combobox(p, textvariable=self._cs_jours_var,
+                                        values=["(toutes dates)", "1 jour", "3 jours",
+                                                "7 jours", "14 jours", "31 jours"],
+                                        state="readonly", width=14))
+
+        self._cs_departement_var = tk.StringVar()
+        dep_w = _opt_row("Lieu :",
+                          lambda p: ttk.Entry(p, textvariable=self._cs_departement_var, width=20))
+        tk.Label(c2.winfo_children()[-1], text="(ville, département — ex: Paris, 69, Lyon)",
+                 bg=self._CARD, fg=self._FG_MUTED,
+                 font=self._font(9)).pack(side="left", padx=(8, 0))
+
+        r_max = tk.Frame(c2, bg=self._CARD)
+        r_max.pack(fill="x", padx=12, pady=3)
+        tk.Label(r_max, text="Max offres / entreprise :", bg=self._CARD, fg=self._FG,
+                 width=20, anchor="e", font=self._font(10)).pack(side="left", padx=(0, 8))
+        self._cs_max_var = tk.StringVar(value="100")
+        ttk.Entry(r_max, textvariable=self._cs_max_var, width=8).pack(side="left")
+        tk.Label(r_max, text="(défaut 100)",
+                 bg=self._CARD, fg=self._FG_MUTED, font=self._font(9)).pack(
+                     side="left", padx=(8, 0))
+
+        # ── Card 3 : Sortie ───────────────────────────────────────────
+        c3 = tk.LabelFrame(sf, text="  💾  Fichier de sortie  ",
+                           bg=self._CARD, fg=self._FG,
+                           font=self._font(11, "bold"),
+                           relief="flat", bd=1,
+                           highlightbackground=self._BORDER, highlightthickness=1,
+                           padx=0, pady=6)
+        c3.pack(fill="x", padx=16, pady=(0, 6))
+
+        row_out = tk.Frame(c3, bg=self._CARD)
+        row_out.pack(fill="x", padx=12, pady=4)
+        tk.Label(row_out, text="CSV de sortie :", bg=self._CARD, fg=self._FG,
+                 width=16, anchor="e", font=self._font(10)).pack(side="left", padx=(0, 8))
+
+        self._cs_out_var = tk.StringVar()
+        ttk.Entry(row_out, textvariable=self._cs_out_var, width=50).pack(side="left", padx=(0, 6))
+
+        def pick_out():
+            path = filedialog.asksaveasfilename(
+                title="Enregistrer le CSV résultat",
+                defaultextension=".csv",
+                filetypes=[("CSV", "*.csv"), ("Tous", "*.*")],
+                initialfile=f"offres_entreprises_{datetime.now().strftime('%Y%m%d')}.csv",
+            )
+            if path:
+                self._cs_out_var.set(path)
+
+        ttk.Button(row_out, text="Choisir…", command=pick_out).pack(side="left")
+        tk.Label(c3, text="Si vide, un fichier offres_entreprises_YYYYMMDD_HHMMSS.csv sera créé dans le dossier courant.",
+                 bg=self._CARD, fg=self._FG_MUTED,
+                 font=self._font(9)).pack(anchor="w", padx=28, pady=(0, 4))
+
+        # ── Actions ───────────────────────────────────────────────────
+        act_row = tk.Frame(sf, bg=self._BG)
+        act_row.pack(fill="x", padx=16, pady=(4, 8))
+
+        self._cs_run_btn = ttk.Button(
+            act_row, text="  🚀  Lancer la recherche  ",
+            style="Run.TButton", command=self._cs_launch,
+        )
+        self._cs_run_btn.pack(side="left", padx=(0, 10))
+
+        self._cs_cancel_btn = tk.Button(
+            act_row, text="  ✖  Annuler  ",
+            bg="#FF3B30", fg="white",
+            activebackground="#CC2D24", activeforeground="white",
+            font=self._font(12, "bold"), relief="flat", cursor="hand2",
+            padx=16, pady=8,
+            command=self._cs_cancel,
+        )
+        # Pas pack() ici — affiché dynamiquement
+
+        self._cs_open_btn = ttk.Button(
+            act_row, text="📂  Ouvrir le CSV",
+            command=self._cs_open_result, state="disabled",
+        )
+        self._cs_open_btn.pack(side="left")
+
+        # ── Progress + statut ─────────────────────────────────────────
+        prog_frame = tk.Frame(sf, bg=self._BG)
+        prog_frame.pack(fill="x", padx=16, pady=(0, 4))
+        self._cs_progress = ttk.Progressbar(prog_frame, mode="indeterminate")
+        self._cs_progress.pack(fill="x")
+
+        self._cs_status_var = tk.StringVar(value="Importe un CSV et lance la recherche.")
+        tk.Label(sf, textvariable=self._cs_status_var,
+                 bg=self._BORDER, fg=self._FG, anchor="w",
+                 padx=12, pady=4, font=self._font(9)).pack(fill="x", padx=0)
+
+        # ── Log ───────────────────────────────────────────────────────
+        log_card = tk.LabelFrame(
+            sf, text="  Journal  ",
+            bg=self._CARD, fg=self._FG,
+            font=self._font(10, "bold"),
+            relief="flat", bd=1,
+            highlightbackground=self._BORDER, highlightthickness=1,
+        )
+        log_card.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+
+        vsb_log = ttk.Scrollbar(log_card)
+        vsb_log.pack(side="right", fill="y")
+        self._cs_log_text = tk.Text(
+            log_card, height=16, state="disabled", wrap="word",
+            yscrollcommand=vsb_log.set,
+            font=("SF Mono", 9) if sys.platform == "darwin" else ("Consolas", 9),
+            bg="#1E1E2E", fg="#CDD6F4",
+            insertbackground="#CDD6F4",
+            relief="flat", padx=8, pady=6,
+            selectbackground="#313244",
+        )
+        self._cs_log_text.pack(fill="both", expand=True)
+        vsb_log.config(command=self._cs_log_text.yview)
+
+        # État interne
+        self._cs_cancel_flag = False
+        self._cs_last_output = None
+
+    # ------------------------------------------------------------------
+    # Helpers page entreprises
+    # ------------------------------------------------------------------
+
+    def _cs_log(self, msg: str):
+        """Log dans le panneau de la page Entreprises (thread-safe via queue)."""
+        self._queue.put(("cs_log", msg))
+
+    def _cs_refresh_columns(self, auto_open: bool = False):
+        """Lit les colonnes du CSV sélectionné, peuple le combobox et l'ouvre."""
+        path = self._cs_path_var.get().strip()
+        if not path:
+            return
+        try:
+            cols = cs_list_csv_columns(path)
+            if not cols:
+                self._cs_count_lbl.configure(text="⚠️ Aucune colonne détectée")
+                return
+
+            self._cs_col_combo["values"] = cols
+
+            # Auto-sélection intelligente : cherche une colonne au nom évocateur
+            preferred = None
+            for kw in ("entreprise", "company", "société", "societe", "raison", "nom"):
+                for col in cols:
+                    if kw in col.lower():
+                        preferred = col
+                        break
+                if preferred:
+                    break
+            self._cs_col_var.set(preferred or cols[0])
+
+            n = len(cols)
+            hint = f" — « {preferred} » sélectionnée" if preferred else ""
+            self._cs_count_lbl.configure(
+                text=f"✅ {n} colonne{'s' if n > 1 else ''} détectée{'s' if n > 1 else ''}{hint}"
+            )
+
+            # Ouvre le menu déroulant pour inviter l'utilisateur à choisir
+            if auto_open:
+                self._cs_col_combo.after(150, self._cs_col_combo.event_generate("<Button-1>"))
+
+        except Exception as e:
+            messagebox.showerror("Erreur CSV", str(e), parent=self)
+
+    def _cs_cancel(self):
+        self._cs_cancel_flag = True
+        self._cs_log("🛑  Annulation demandée…")
+        self._cs_status_var.set("⚠️  Annulation en cours…")
+
+    def _cs_open_result(self):
+        if not self._cs_last_output or not os.path.exists(self._cs_last_output):
+            messagebox.showinfo("Aucun fichier", "Aucun export disponible.")
+            return
+        if sys.platform == "darwin":
+            subprocess.run(["open", self._cs_last_output], check=False)
+        elif sys.platform.startswith("win"):
+            os.startfile(self._cs_last_output)  # noqa: S606
+        else:
+            subprocess.run(["xdg-open", self._cs_last_output], check=False)
+
+    def _cs_launch(self):
+        """Valide les champs et lance la recherche HelloWork par entreprises."""
+        path = self._cs_path_var.get().strip()
+        col  = self._cs_col_var.get().strip()
+        if not path:
+            messagebox.showwarning("Fichier manquant",
+                                   "Sélectionne un fichier CSV d'entreprises.", parent=self)
+            return
+        if not col or col == "— chargez un CSV —":
+            messagebox.showwarning("Colonne manquante",
+                                   "Choisis la colonne contenant les noms d'entreprises.",
+                                   parent=self)
+            return
+
+        # Token Apify (HelloWork)
+        apify = self.apify_token_var.get().strip()
+        if not apify:
+            messagebox.showwarning(
+                "Token Apify manquant",
+                "Renseigne ton token Apify dans l'onglet Recherche → section HelloWork.\n"
+                "Obtenu sur https://console.apify.com/account/integrations",
+                parent=self,
+            )
+            return
+
+        try:
+            max_per = int(self._cs_max_var.get().strip() or "100")
+        except ValueError:
+            max_per = 100
+
+        # Paramètres optionnels HelloWork
+        extra_params: dict = {}
+
+        contrat = self._cs_contrat_var.get()
+        hw_contrat_map = {
+            "CDI": "CDI", "CDD": "CDD", "MIS": "INTERIM",
+            "SAI": "CDD", "ALT": "ALTERNANCE",
+        }
+        if contrat != "(tous)":
+            extra_params["contractTypes"] = [hw_contrat_map.get(contrat, contrat)]
+
+        jours_map = {
+            "1 jour": "24h", "3 jours": "3d", "7 jours": "1w",
+            "14 jours": "1w", "31 jours": "1m",
+        }
+        jours = jours_map.get(self._cs_jours_var.get(), "")
+        if jours:
+            extra_params["datePosted"] = jours
+
+        location = self._cs_departement_var.get().strip()
+        if location:
+            from hellowork_lib import resolve_hw_location
+            resolved, was_resolved = resolve_hw_location(location)
+            extra_params["location"] = resolved
+            if was_resolved:
+                self._cs_log(f"📍 Lieu résolu : {location} → {resolved}")
+            else:
+                self._cs_log(f"📍 Lieu : {resolved}")
+
+        output_path = self._cs_out_var.get().strip() or (
+            f"offres_entreprises_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        )
+
+        # Reset UI
+        self._cs_cancel_flag = False
+        self._cs_run_btn.configure(state="disabled")
+        self._cs_run_btn.pack_forget()
+        self._cs_cancel_btn.pack(side="left", padx=(0, 10))
+        self._cs_open_btn.configure(state="disabled")
+        self._cs_progress.start(12)
+        self._cs_log_text.configure(state="normal")
+        self._cs_log_text.delete("1.0", "end")
+        self._cs_log_text.configure(state="disabled")
+        self._cs_status_var.set("Chargement du CSV…")
+
+        threading.Thread(
+            target=self._cs_worker,
+            args=(path, col, apify, extra_params, max_per, output_path),
+            daemon=True,
+        ).start()
+
+    def _cs_worker(self, csv_path, col_name, apify_token,
+                   extra_params, max_per, output_path):
+        """Worker thread — recherche HelloWork par entreprises."""
+        try:
+            # Charger les entreprises
+            self._cs_log(f"📂 Chargement : {csv_path}")
+            companies = cs_load_company_names(csv_path, col_name)
+            if not companies:
+                self._queue.put(("cs_done", (None, "Aucune entreprise trouvée dans le CSV.")))
+                return
+
+            self._cs_log(f"   → {len(companies)} entreprise(s) à traiter")
+            if extra_params:
+                self._cs_log(f"\n⚙️  Paramètres : {extra_params}")
+
+            self._cs_log(f"\n🚀 Recherche HelloWork — lots de {CS_BATCH_SIZE}\n")
+
+            all_rows: list[dict] = []
+            seen_offer_ids: set[str] = set()
+            total = len(companies)
+
+            import unicodedata as _ud
+            def _norm(s):
+                s = (s or "").lower().strip()
+                return "".join(c for c in _ud.normalize("NFD", s)
+                               if _ud.category(c) != "Mn")
+
+            for batch_start in range(0, total, CS_BATCH_SIZE):
+                if self._cs_cancel_flag:
+                    self._cs_log("🛑  Annulation — arrêt.")
+                    break
+
+                batch = companies[batch_start: batch_start + CS_BATCH_SIZE]
+                batch_num   = batch_start // CS_BATCH_SIZE + 1
+                total_batches = (total + CS_BATCH_SIZE - 1) // CS_BATCH_SIZE
+
+                self._cs_log(f"{'─'*56}")
+                self._cs_log(
+                    f"Lot {batch_num}/{total_batches} "
+                    f"— entreprises {batch_start+1}–{min(batch_start+CS_BATCH_SIZE, total)}/{total}"
+                )
+                self._cs_log(f"{'─'*56}")
+
+                for company in batch:
+                    if self._cs_cancel_flag:
+                        break
+                    self._cs_log(f"\n  🔍  {company}")
+
+                    try:
+                        rows_raw = fetch_hellowork_offers(
+                            apify_token,
+                            search_queries=[company],
+                            location=extra_params.get("location", ""),
+                            max_results=max_per,
+                            contract_types=extra_params.get("contractTypes"),
+                            date_posted=extra_params.get("datePosted", "any"),
+                            log=self._cs_log,
+                            check_cancel=lambda: self._cs_cancel_flag,
+                        )
+                    except HelloWorkError as err:
+                        self._cs_log(f"    ⚠️  Erreur : {err}")
+                        rows_raw = []
+
+                    # On conserve toutes les offres retournées par HelloWork.
+                    # Le scraper cherche par mots-clés (titre/description/secteur),
+                    # pas par filtre exact sur le nom d'entreprise — le filtrage
+                    # post-traitement éliminerait tout. Le nom recherché est tracé
+                    # dans la colonne entreprise_recherchee pour retrouver l'origine.
+                    self._cs_log(f"    → {len(rows_raw)} offre(s) trouvée(s)")
+
+                    new_count = 0
+                    for row in rows_raw:
+                        offer_id = str(row.get("id") or row.get("jobId") or "")
+                        if offer_id and offer_id in seen_offer_ids:
+                            continue
+                        if offer_id:
+                            seen_offer_ids.add(offer_id)
+                        row["entreprise_recherchee"] = company
+                        row["nb_offres_entreprise"] = len(rows_raw)
+                        all_rows.append(row)
+                        new_count += 1
+
+                    self._cs_log(f"    ✅  {new_count} offre(s) retenue(s) — total : {len(all_rows)}")
+                    time.sleep(CS_DELAY_BETWEEN_CALLS)
+
+                if not self._cs_cancel_flag and batch_start + CS_BATCH_SIZE < total:
+                    self._cs_log(f"\n⏸  Pause {CS_DELAY_BETWEEN_BATCHES}s…")
+                    time.sleep(CS_DELAY_BETWEEN_BATCHES)
+
+            # Export
+            if all_rows:
+                from collections import Counter
+                count = export_csv_rows(all_rows, output_path, fieldnames=CS_OUTPUT_FIELDNAMES)
+                self._cs_log(f"\n✅  {count} offre(s) exportée(s) → {output_path}")
+                # Commit IDs dans le cache + archivage
+                commit_rows(all_rows)
+                archive_csv(output_path, all_rows, label="company_search")
+
+                counts = Counter(r["entreprise_recherchee"] for r in all_rows)
+                self._cs_log("\n📊 Résumé :")
+                for comp, n in sorted(counts.items(), key=lambda x: -x[1])[:20]:
+                    self._cs_log(f"  {n:4d}  {comp}")
+                zero = [c for c in companies if counts.get(c, 0) == 0]
+                if zero:
+                    self._cs_log(f"\n  Aucune offre pour {len(zero)} entreprise(s)")
+
+                msg = (
+                    f"{'🛑 Partiel — ' if self._cs_cancel_flag else ''}"
+                    f"{count} offre(s) exportée(s) → {output_path}"
+                )
+                self._queue.put(("cs_done", (output_path, msg)))
+            else:
+                self._queue.put(("cs_done", (None, "Aucune offre trouvée.")))
+
+        except (ValueError, FileNotFoundError) as e:
+            self._queue.put(("cs_done", (None, f"Erreur : {e}")))
+        except HelloWorkError as e:
+            self._queue.put(("cs_done", (None, f"Erreur HelloWork : {e}")))
+        except Exception as e:
+            self._queue.put(("cs_done", (None, f"Erreur inattendue : {e}")))
 
 
 # ---------------------------------------------------------------------------

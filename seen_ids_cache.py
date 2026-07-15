@@ -9,14 +9,23 @@ Format   : {"ids": ["id1", "id2", ...], "count": 42, "last_cleared": "2026-07-01
 
 Pour les offres sans ID, un fingerprint stable est généré à partir du contenu
 (titre + entreprise + ville + url) afin de garantir la déduplication.
+
+Archive : dossier <dossier_projet>/exports_archive/
+  Chaque export CSV y est copié automatiquement, avec un index JSON
+  (exports_archive/index.json) permettant de retrouver n'importe quel export
+  passé même si le fichier original a été perdu ou déplacé.
 """
 
+import csv
 import hashlib
 import json
 import os
+import shutil
 from datetime import datetime
 
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seen_ids.json")
+CACHE_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seen_ids.json")
+ARCHIVE_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "exports_archive")
+ARCHIVE_INDEX = os.path.join(ARCHIVE_DIR, "index.json")
 
 
 def _fingerprint(row: dict) -> str:
@@ -153,3 +162,131 @@ def clear_cache():
         "last_cleared": datetime.now().isoformat(timespec="seconds"),
     }
     _save(data)
+
+
+# ---------------------------------------------------------------------------
+# Archive des exports
+# ---------------------------------------------------------------------------
+
+def _load_index() -> list[dict]:
+    """Charge l'index des exports archivés."""
+    if not os.path.exists(ARCHIVE_INDEX):
+        return []
+    try:
+        with open(ARCHIVE_INDEX, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_index(entries: list[dict]):
+    os.makedirs(ARCHIVE_DIR, exist_ok=True)
+    with open(ARCHIVE_INDEX, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, indent=2)
+
+
+def archive_csv(source_path: str, rows: list[dict], label: str = "") -> str | None:
+    """
+    Copie un CSV exporté dans exports_archive/ et enregistre l'entrée dans
+    l'index JSON.  Retourne le chemin du fichier archivé, ou None en cas d'échec.
+
+    Paramètres :
+      source_path : chemin du CSV qui vient d'être écrit (peut être vide/None si
+                    le CSV n'a pas encore été écrit sur disque — dans ce cas on
+                    crée le fichier archivé directement depuis les rows).
+      rows        : liste de dicts représentant les offres exportées.
+      label       : description optionnelle (ex: "company_search", "offres FT").
+    """
+    if not rows:
+        return None
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = os.path.basename(source_path) if source_path else f"export_{ts}.csv"
+    # Nom unique dans l'archive : horodatage + nom original
+    archive_name = f"{ts}_{base}" if not base.startswith(ts) else base
+    archive_path = os.path.join(ARCHIVE_DIR, archive_name)
+
+    os.makedirs(ARCHIVE_DIR, exist_ok=True)
+
+    try:
+        if source_path and os.path.exists(source_path):
+            shutil.copy2(source_path, archive_path)
+        else:
+            # Fallback : réécrire depuis les rows si le fichier source n'existe pas
+            if rows:
+                fieldnames = list(rows[0].keys())
+                with open(archive_path, "w", newline="", encoding="utf-8-sig") as f:
+                    import csv as _csv
+                    writer = _csv.DictWriter(f, fieldnames=fieldnames, delimiter=";",
+                                            extrasaction="ignore")
+                    writer.writeheader()
+                    for row in rows:
+                        writer.writerow({k: row.get(k, "") for k in fieldnames})
+    except OSError:
+        return None
+
+    # Enregistre dans l'index
+    entry = {
+        "archived_at": datetime.now().isoformat(timespec="seconds"),
+        "archive_file": archive_name,
+        "original_path": source_path or "",
+        "label": label,
+        "count": len(rows),
+        "ids": [get_row_id(r) for r in rows],
+    }
+    entries = _load_index()
+    entries.append(entry)
+    _save_index(entries)
+
+    return archive_path
+
+
+def list_archives() -> list[dict]:
+    """
+    Retourne la liste des exports archivés (plus récent en premier).
+    Chaque entrée contient : archived_at, archive_file, original_path,
+    label, count, ids, et archive_path (chemin absolu).
+    """
+    entries = _load_index()
+    result = []
+    for e in reversed(entries):
+        e = dict(e)
+        e["archive_path"] = os.path.join(ARCHIVE_DIR, e.get("archive_file", ""))
+        e["exists"] = os.path.exists(e["archive_path"])
+        result.append(e)
+    return result
+
+
+def restore_from_archive(archive_file: str, destination: str) -> bool:
+    """
+    Copie un fichier archivé vers destination.
+    Retourne True si la restauration a réussi.
+    """
+    src = os.path.join(ARCHIVE_DIR, archive_file)
+    if not os.path.exists(src):
+        return False
+    try:
+        shutil.copy2(src, destination)
+        return True
+    except OSError:
+        return False
+
+
+def get_archive_stats() -> dict:
+    """Retourne les stats de l'archive."""
+    entries = _load_index()
+    total_files = len(entries)
+    total_offers = sum(e.get("count", 0) for e in entries)
+    size_bytes = 0
+    if os.path.exists(ARCHIVE_DIR):
+        for f in os.listdir(ARCHIVE_DIR):
+            fp = os.path.join(ARCHIVE_DIR, f)
+            if os.path.isfile(fp):
+                size_bytes += os.path.getsize(fp)
+    return {
+        "total_exports": total_files,
+        "total_offers": total_offers,
+        "size_kb": round(size_bytes / 1024, 1),
+        "path": ARCHIVE_DIR,
+    }
