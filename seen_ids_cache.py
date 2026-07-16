@@ -33,9 +33,18 @@ def _fingerprint(row: dict) -> str:
     Génère un identifiant stable pour une offre sans ID.
     Basé sur : url > (intitule + entreprise + ville + date_publication).
     Préfixe 'fp:' pour distinguer des vrais IDs.
+
+    Champs URL supportés (toutes sources) :
+      - 'url'          → format unifié HW et FT après flatten
+      - 'url_origine'  → format brut FT (ftl_flatten_for_dedup)
     """
     # L'URL est la meilleure clé de dédup car elle est unique par offre
-    url = (row.get("url") or row.get("url_origine") or "").strip()
+    url = (
+        row.get("url")
+        or row.get("url_origine")
+        or row.get("urlOrigine")
+        or ""
+    ).strip()
     if url:
         key = url
     else:

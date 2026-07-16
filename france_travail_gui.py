@@ -41,6 +41,25 @@ from company_search import (
     DELAY_BETWEEN_BATCHES as CS_DELAY_BETWEEN_BATCHES,
 )
 
+# Liste unifiée de toutes les colonnes possibles (HW + FT) pour le sélecteur CSV
+# Les champs HW sont la base ; on y ajoute les champs FT spécifiques absents.
+_FT_EXTRA_FIELDS = [
+    "entreprise_description", "siret", "code_naf",
+    "commune_insee", "latitude", "longitude",
+    "type_contrat_libelle", "duree_travail", "duree_travail_convertie",
+    "temps_plein", "nombre_postes", "accessibilite_emploi",
+    "salaire_complement1", "salaire_complement2", "salaire_commentaire",
+    "experience_commentaire", "langues", "permis", "qualites_professionnelles",
+    "date_actualisation", "partenaires_diffusion",
+    "contact_coordonnees1", "contact_coordonnees2", "contact_coordonnees3",
+    "contact_url_recrutement", "contact_url_postuler", "contact_commentaire",
+    # HW enriched spécifiques
+    "secteur_entreprise",
+]
+ALL_UNIFIED_FIELDNAMES = list(HW_UNIFIED_FIELDNAMES) + [
+    f for f in _FT_EXTRA_FIELDS if f not in HW_UNIFIED_FIELDNAMES
+]
+
 
 def ftl_flatten_for_dedup(offer: dict) -> dict:
     """Extrait les champs minimaux d'une offre FT brute pour le fingerprinting."""
@@ -478,19 +497,36 @@ SECTEUR_CHOICES = ["(aucun)"] + sorted(SECTEURS.keys())
 
 # Colonnes du tableau résultats
 COLUMNS = [
-    ("url",             "Lien",          180),
-    ("lien_maps",       "📍 Maps",        160),
-    ("source",          "Source",         80),
-    ("intitule",        "Poste",         200),
-    ("entreprise",      "Entreprise",    160),
-    ("ville",           "Ville",         110),
-    ("type_contrat",    "Contrat",        70),
-    ("salaire_libelle", "Salaire",       120),
-    ("date_publication","Date",           90),
-    ("teletravail",     "Télétravail",    90),
-    ("secteur",         "Secteur",       140),
-    ("experience",      "Expérience",    110),
-    ("description",     "Description",   300),
+    ("url",                     "Lien",              180),
+    ("lien_maps",               "📍 Maps",            160),
+    ("source",                  "Source",              80),
+    ("intitule",                "Poste",              200),
+    ("entreprise",              "Entreprise",         160),
+    ("siret",                   "SIRET",               120),
+    ("ville",                   "Ville",              110),
+    ("type_contrat",            "Contrat",             70),
+    ("salaire_libelle",         "Salaire",            120),
+    ("date_publication",        "Date",                90),
+    ("teletravail",             "Télétravail",         90),
+    ("secteur",                 "Secteur",            140),
+    ("experience",              "Expérience",         110),
+    # Contact / recruteur
+    ("contact_nom",             "Contact (nom)",      130),
+    ("contact_telephone",       "📞 Téléphone",        120),
+    ("contact_email",           "📧 Email",            160),
+    # Dirigeant
+    ("dirigeant_nom",           "Dirigeant",          130),
+    ("dirigeant_titre",         "Titre dirigeant",    110),
+    ("dirigeant_linkedin",      "LinkedIn dirigeant", 160),
+    # Entreprise enrichie
+    ("entreprise_url",          "URL entreprise",     160),
+    ("site_web_entreprise",     "Site web",           160),
+    ("linkedin_entreprise",     "LinkedIn entreprise",160),
+    ("taille_entreprise",       "Effectif (nb)",       90),
+    ("effectif_entreprise",     "Effectif (label)",   120),
+    ("annee_creation_entreprise","Création (année)",   90),
+    ("chiffre_affaires_entreprise","CA entreprise",   120),
+    ("description",             "Description",        300),
 ]
 COL_KEYS   = [c[0] for c in COLUMNS]
 COL_LABELS = {c[0]: c[1] for c in COLUMNS}
@@ -1356,30 +1392,89 @@ class App(tk.Tk):
         """Panneau de sélection des colonnes à inclure dans le CSV."""
         self._col_vars: dict[str, tk.BooleanVar] = {}
         LABELS = {
-            "url":              "Lien (URL)",
-            "lien_maps":        "📍 Lien Google Maps",
-            "source":           "Source (FT / HW)",
-            "id":               "ID offre",
-            "intitule":         "Intitulé du poste",
-            "entreprise":       "Entreprise",
-            "entreprise_url":   "URL entreprise",
-            "ville":            "Ville",
-            "region":           "Région",
-            "code_postal":      "Code postal",
-            "secteur":          "Secteur",
-            "domaine":          "Domaine",
-            "type_contrat":     "Type de contrat",
-            "teletravail":      "Télétravail",
-            "salaire_libelle":  "Salaire (libellé)",
-            "salaire_min":      "Salaire min (€)",
-            "salaire_max":      "Salaire max (€)",
-            "experience":       "Expérience requise",
-            "formation":        "Formation requise",
-            "competences":      "Compétences",
-            "taille_entreprise":"Taille entreprise",
-            "effectif_entreprise":"Effectif entreprise",
-            "date_publication": "Date de publication",
-            "description":      "Description",
+            "url":                          "Lien (URL)",
+            "lien_maps":                    "📍 Lien Google Maps",
+            "source":                       "Source (FT / HW)",
+            "id":                           "ID offre",
+            "intitule":                     "Intitulé du poste",
+            # Entreprise
+            "entreprise":                   "Entreprise",
+            "entreprise_url":               "URL entreprise",
+            "entreprise_logo":              "Logo entreprise",
+            "entreprise_description":       "Description entreprise",
+            "siret":                        "SIRET",
+            "site_web_entreprise":          "Site web entreprise",
+            "linkedin_entreprise":          "LinkedIn entreprise",
+            "twitter_entreprise":           "Twitter entreprise",
+            "facebook_entreprise":          "Facebook entreprise",
+            "annee_creation_entreprise":    "Année de création",
+            "chiffre_affaires_entreprise":  "Chiffre d'affaires",
+            "taille_entreprise":            "Effectif (nombre)",
+            "effectif_entreprise":          "Effectif (libellé)",
+            # Dirigeant
+            "dirigeant_nom":                "Dirigeant (nom)",
+            "dirigeant_titre":              "Dirigeant (titre)",
+            "dirigeant_linkedin":           "Dirigeant (LinkedIn)",
+            # Contact recruteur
+            "contact_nom":                  "Contact (nom)",
+            "contact_telephone":            "📞 Téléphone contact",
+            "contact_email":                "📧 Email contact",
+            "contact_linkedin":             "LinkedIn contact",
+            "contact_coordonnees1":         "Coordonnées 1",
+            "contact_coordonnees2":         "Coordonnées 2",
+            "contact_coordonnees3":         "Coordonnées 3",
+            "contact_url_recrutement":      "URL recruteur",
+            "contact_url_postuler":         "URL postuler",
+            "contact_commentaire":          "Commentaire contact",
+            # Lieu
+            "ville":                        "Ville",
+            "region":                       "Région",
+            "code_postal":                  "Code postal",
+            "pays":                         "Pays",
+            "commune_insee":                "Code INSEE commune",
+            "latitude":                     "Latitude",
+            "longitude":                    "Longitude",
+            # Catégories
+            "secteur":                      "Secteur",
+            "secteur_activite":             "Secteur activité",
+            "code_naf":                     "Code NAF",
+            "secteur_entreprise":           "Secteur entreprise (HW)",
+            "domaine":                      "Domaine",
+            # Contrat
+            "type_contrat":                 "Type de contrat",
+            "type_contrat_libelle":         "Contrat (libellé)",
+            "teletravail":                  "Télétravail",
+            "duree_travail":                "Durée travail",
+            "duree_travail_convertie":      "Durée travail convertie",
+            "temps_plein":                  "Temps plein",
+            "nombre_postes":                "Nb postes",
+            "accessibilite_emploi":         "Accessible TH",
+            # Salaire
+            "salaire_libelle":              "Salaire (libellé)",
+            "salaire_min":                  "Salaire min (€)",
+            "salaire_max":                  "Salaire max (€)",
+            "salaire_devise":               "Devise salaire",
+            "salaire_periode":              "Période salaire",
+            "salaire_complement1":          "Salaire complément 1",
+            "salaire_complement2":          "Salaire complément 2",
+            "salaire_commentaire":          "Commentaire salaire",
+            # Candidat
+            "experience":                   "Expérience requise",
+            "experience_commentaire":       "Expérience (détail)",
+            "formation":                    "Formation requise",
+            "competences":                  "Compétences",
+            "qualifications":               "Qualifications",
+            "langues":                      "Langues",
+            "permis":                       "Permis",
+            "qualites_professionnelles":    "Qualités professionnelles",
+            # Dates
+            "date_publication":             "Date de publication",
+            "date_actualisation":           "Date d'actualisation",
+            "date_expiration":              "Date d'expiration",
+            # Divers
+            "mots_cles_recherche":          "Mots-clés recherche",
+            "partenaires_diffusion":        "Partenaires diffusion",
+            "description":                  "Description",
         }
 
         # ── En-tête avec boutons ──────────────────────────────────────
@@ -1407,7 +1502,7 @@ class App(tk.Tk):
         grid = tk.Frame(parent, bg=self._BG)
         grid.pack(fill="x", padx=10, pady=(0, 6))
 
-        ALL_FIELDS = HW_UNIFIED_FIELDNAMES
+        ALL_FIELDS = ALL_UNIFIED_FIELDNAMES
         cols_per_row = 4
 
         for i, field in enumerate(ALL_FIELDS):
@@ -1464,9 +1559,14 @@ class App(tk.Tk):
     def _select_essential_cols(self):
         """Sélectionne uniquement les colonnes les plus utiles."""
         essential = {
-            "url", "intitule", "entreprise", "ville",
+            "url", "lien_maps", "intitule", "entreprise", "ville",
             "type_contrat", "salaire_libelle", "teletravail",
             "date_publication", "experience", "secteur", "description",
+            # Contact & dirigeant
+            "contact_nom", "contact_telephone", "contact_email",
+            "dirigeant_nom", "dirigeant_titre",
+            # Entreprise
+            "siret", "taille_entreprise", "effectif_entreprise",
         }
         for field, var in self._col_vars.items():
             var.set(field in essential)
@@ -1474,7 +1574,7 @@ class App(tk.Tk):
 
     def _get_selected_columns(self) -> list[str]:
         """Retourne la liste ordonnée des colonnes sélectionnées (ordre de UNIFIED_FIELDNAMES)."""
-        ALL_FIELDS = HW_UNIFIED_FIELDNAMES
+        ALL_FIELDS = ALL_UNIFIED_FIELDNAMES
         selected = [f for f in ALL_FIELDS if self._col_vars.get(f, tk.BooleanVar(value=True)).get()]
         # Garantit qu'au minimum les colonnes essentielles sont présentes
         if not selected:

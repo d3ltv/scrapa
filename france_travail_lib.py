@@ -172,6 +172,15 @@ def matches_company_filter(offer: dict, company_pattern: str) -> bool:
     return bool(re.search(company_pattern, nom, re.IGNORECASE))
 
 
+def _join_list(items, key=None, sep=", ") -> str:
+    """Sérialise une liste de dicts ou de strings en chaîne."""
+    if not items:
+        return ""
+    if key:
+        return sep.join(str(i.get(key, "")) for i in items if i.get(key))
+    return sep.join(str(i) for i in items if i)
+
+
 def flatten_offer(offer: dict) -> dict:
     entreprise = offer.get("entreprise")
     # Robustesse : l'API peut exceptionnellement renvoyer un string au lieu d'un dict
@@ -180,30 +189,120 @@ def flatten_offer(offer: dict) -> dict:
     lieu = offer.get("lieuTravail") or {}
     salaire = offer.get("salaire") or {}
     contact = offer.get("contact") or {}
+    origine = offer.get("origineOffre") or {}
 
     nom_entreprise = entreprise.get("nom")
     ville_libelle = lieu.get("libelle")
+
+    # Formations : liste de dicts avec niveauLibelle et domaineLibelle
+    formations = offer.get("formations") or []
+    formations_str = "; ".join(
+        filter(None, [
+            f"{f.get('niveauLibelle', '')} {f.get('domaineLibelle', '')}".strip()
+            for f in formations
+        ])
+    )
+
+    # Compétences : liste de dicts avec libelle et exigence
+    competences = offer.get("competences") or []
+    competences_str = "; ".join(
+        f"{c.get('libelle', '')} ({c.get('exigence', '')})" if c.get("exigence") else c.get("libelle", "")
+        for c in competences
+        if c.get("libelle")
+    )
+
+    # Langues
+    langues = offer.get("langues") or []
+    langues_str = "; ".join(
+        f"{l.get('libelle', '')} ({l.get('niveauLibelle', '')})" if l.get("niveauLibelle") else l.get("libelle", "")
+        for l in langues
+        if l.get("libelle")
+    )
+
+    # Permis de conduire
+    permis = offer.get("permis") or []
+    permis_str = _join_list(permis, key="libelle")
+
+    # Qualités professionnelles
+    qualites = offer.get("qualitesProfessionnelles") or []
+    qualites_str = _join_list(qualites, key="libelle")
+
+    # Partenaires diffuseurs
+    partenaires = origine.get("partenaires") or []
+    partenaires_str = "; ".join(
+        f"{p.get('nom', '')} {p.get('url', '')}".strip()
+        for p in partenaires
+        if p.get("nom") or p.get("url")
+    )
+
     return {
+        # --- Identification offre ---
         "id": offer.get("id"),
         "intitule": offer.get("intitule"),
+        "date_creation": offer.get("dateCreation"),
+        "date_actualisation": offer.get("dateActualisation"),
+        "url_origine": origine.get("urlOrigine"),
+        "partenaires_diffusion": partenaires_str,
+
+        # --- Entreprise ---
         "entreprise": nom_entreprise,
-        "entreprise_description": (entreprise.get("description") or "")[:300],
+        "entreprise_description": (entreprise.get("description") or "")[:400],
+        "entreprise_url": entreprise.get("url") or "",
+        "entreprise_logo": entreprise.get("logo") or "",
+        "entreprise_adaptee": entreprise.get("entrepriseAdaptee"),  # ESAT / EA
+        "siret": entreprise.get("siret") or "",
         "secteur_activite": offer.get("secteurActiviteLibelle"),
+        "code_naf": offer.get("secteurActivite") or "",
+        "nature_offre": offer.get("natureOffre"),
+
+        # --- Lieu ---
         "ville": ville_libelle,
         "code_postal": lieu.get("codePostal"),
         "departement": (lieu.get("codePostal") or "")[:2],
+        "commune_insee": lieu.get("commune"),
+        "latitude": lieu.get("latitude"),
+        "longitude": lieu.get("longitude"),
+
+        # --- Contrat & conditions ---
         "type_contrat": offer.get("typeContrat"),
         "type_contrat_libelle": offer.get("typeContratLibelle"),
         "duree_travail": offer.get("dureeTravailLibelle"),
+        "duree_travail_convertie": offer.get("dureeTravailLibelleConverti"),
+        "temps_plein": offer.get("tempsPlein"),
         "experience_exigee": offer.get("experienceLibelle"),
+        "experience_commentaire": offer.get("experienceCommentaire") or "",
         "qualification": offer.get("qualificationLibelle"),
+        "code_qualification": offer.get("qualification") or "",
+        "accessibilite_emploi": offer.get("accessibleTH"),  # Travailleur handicapé
+        "nombre_postes": offer.get("nombrePostes"),
+        "alt_licence": offer.get("alternanceLibelle"),
+
+        # --- Salaire ---
         "salaire_libelle": salaire.get("libelle"),
-        "date_creation": offer.get("dateCreation"),
-        "date_actualisation": offer.get("dateActualisation"),
-        "description": (offer.get("description") or "").replace("\n", " ")[:500],
-        "url_origine": (offer.get("origineOffre") or {}).get("urlOrigine"),
+        "salaire_complement1": salaire.get("complement1") or "",
+        "salaire_complement2": salaire.get("complement2") or "",
+        "salaire_commentaire": salaire.get("commentaire") or "",
+
+        # --- Compétences & formation ---
+        "competences": competences_str,
+        "formations": formations_str,
+        "langues": langues_str,
+        "permis": permis_str,
+        "qualites_professionnelles": qualites_str,
+
+        # --- Contact recruteur ---
         "contact_nom": contact.get("nom"),
+        "contact_coordonnees1": contact.get("coordonnees1") or "",
+        "contact_coordonnees2": contact.get("coordonnees2") or "",
+        "contact_coordonnees3": contact.get("coordonnees3") or "",
+        "contact_telephone": contact.get("telephone") or "",
         "contact_email": contact.get("courriel"),
+        "contact_url_recrutement": contact.get("urlRecruteur") or "",
+        "contact_url_postuler": contact.get("urlPostulation") or "",
+        "contact_commentaire": (contact.get("commentaire") or "")[:200],
+
+        # --- Description & lien ---
+        "description": (offer.get("description") or "").replace("\n", " ")[:800],
         "lien_maps": build_maps_url(nom_entreprise, ville_libelle),
     }
 
@@ -216,25 +315,56 @@ def flatten_offer_unified(offer: dict) -> dict:
         "id": row["id"],
         "intitule": row["intitule"],
         "entreprise": row["entreprise"],
-        "entreprise_url": "",
+        "entreprise_url": row["entreprise_url"],
+        "entreprise_logo": row["entreprise_logo"],
+        "siret": row["siret"],
+        "entreprise_description": row["entreprise_description"],
         "ville": row["ville"],
         "region": "",
         "code_postal": row["code_postal"],
+        "commune_insee": row["commune_insee"],
+        "latitude": row["latitude"],
+        "longitude": row["longitude"],
         "secteur": row["secteur_activite"],
+        "code_naf": row["code_naf"],
         "domaine": row["qualification"],
         "type_contrat": row["type_contrat"],
+        "type_contrat_libelle": row["type_contrat_libelle"],
+        "duree_travail": row["duree_travail"],
+        "duree_travail_convertie": row["duree_travail_convertie"],
+        "temps_plein": row["temps_plein"],
         "teletravail": "",
+        "nombre_postes": row["nombre_postes"],
         "salaire_libelle": row["salaire_libelle"],
+        "salaire_complement1": row["salaire_complement1"],
+        "salaire_complement2": row["salaire_complement2"],
+        "salaire_commentaire": row["salaire_commentaire"],
         "salaire_min": "",
         "salaire_max": "",
         "experience": row["experience_exigee"],
-        "formation": row["qualification"],
-        "competences": "",
+        "experience_commentaire": row["experience_commentaire"],
+        "formation": row["formations"],
+        "competences": row["competences"],
+        "langues": row["langues"],
+        "permis": row["permis"],
+        "qualites_professionnelles": row["qualites_professionnelles"],
         "taille_entreprise": "",
         "effectif_entreprise": "",
+        "accessibilite_emploi": row["accessibilite_emploi"],
         "date_publication": row["date_creation"],
+        "date_actualisation": row["date_actualisation"],
         "description": row["description"],
         "url": row["url_origine"],
+        "partenaires_diffusion": row["partenaires_diffusion"],
+        "contact_nom": row["contact_nom"],
+        "contact_telephone": row["contact_telephone"],
+        "contact_email": row["contact_email"],
+        "contact_coordonnees1": row["contact_coordonnees1"],
+        "contact_coordonnees2": row["contact_coordonnees2"],
+        "contact_coordonnees3": row["contact_coordonnees3"],
+        "contact_url_recrutement": row["contact_url_recrutement"],
+        "contact_url_postuler": row["contact_url_postuler"],
+        "contact_commentaire": row["contact_commentaire"],
         "lien_maps": row["lien_maps"],
     }
 
@@ -242,9 +372,12 @@ def flatten_offer_unified(offer: dict) -> dict:
 def export_csv(offers: list, output_path: str):
     if not offers:
         return 0
-    fieldnames = list(flatten_offer(offers[0]).keys())
+    # On génère la liste des colonnes depuis la première offre aplatie
+    # pour rester aligné avec les champs définis dans flatten_offer
+    sample = flatten_offer(offers[0])
+    fieldnames = list(sample.keys())
     with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";", extrasaction="ignore")
         writer.writeheader()
         for offer in offers:
             writer.writerow(flatten_offer(offer))

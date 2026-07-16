@@ -34,7 +34,6 @@ except ImportError:
 
 from hellowork_lib import (
     fetch_hellowork_offers,
-    flatten_standard_job,
     HelloWorkError,
 )
 from export_common import export_csv_rows
@@ -51,32 +50,31 @@ MAX_OFFERS_PER_COMPANY = 100  # max offres récupérées par entreprise
 
 # Colonnes du CSV de sortie
 OUTPUT_FIELDNAMES = [
-    "source",
-    "id",
-    "intitule",
-    "entreprise",
-    "entreprise_url",
-    "ville",
-    "region",
-    "code_postal",
-    "secteur",
-    "domaine",
-    "type_contrat",
-    "teletravail",
-    "salaire_libelle",
-    "salaire_min",
-    "salaire_max",
-    "experience",
-    "formation",
-    "competences",
-    "taille_entreprise",
-    "effectif_entreprise",
-    "date_publication",
+    "source", "id", "intitule", "url",
+    # Entreprise
+    "entreprise", "entreprise_url", "entreprise_logo", "siret",
+    "entreprise_description", "site_web_entreprise",
+    "linkedin_entreprise", "twitter_entreprise", "facebook_entreprise",
+    "annee_creation_entreprise", "chiffre_affaires_entreprise",
+    "taille_entreprise", "effectif_entreprise",
+    # Dirigeant
+    "dirigeant_nom", "dirigeant_titre", "dirigeant_linkedin",
+    # Contact recruteur
+    "contact_nom", "contact_telephone", "contact_email", "contact_linkedin",
+    # Lieu
+    "ville", "region", "code_postal", "pays", "lien_maps",
+    # Catégories
+    "secteur", "domaine",
+    # Contrat
+    "type_contrat", "teletravail",
+    "salaire_libelle", "salaire_min", "salaire_max",
+    "experience", "formation", "competences",
+    # Dates
+    "date_publication", "date_expiration",
+    # Description
     "description",
-    "url",
-    # Champs bonus traçabilité
-    "entreprise_recherchee",
-    "nb_offres_entreprise",
+    # Traçabilité
+    "entreprise_recherchee", "nb_offres_entreprise",
 ]
 
 

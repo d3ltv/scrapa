@@ -234,7 +234,14 @@ def _score_row(row: dict) -> tuple[int, list[str]]:
 
     company     = str(row.get("entreprise") or "")
     description = str(row.get("description") or "")
-    url         = str(row.get("url") or row.get("entreprise_url") or "")
+    # Agrège toutes les URLs disponibles pour la détection par domaine
+    url = " ".join(filter(None, [
+        str(row.get("url") or ""),
+        str(row.get("entreprise_url") or ""),
+        str(row.get("site_web_entreprise") or ""),
+        str(row.get("contact_url_recrutement") or ""),
+        str(row.get("contact_url_postuler") or ""),
+    ])).lower()
 
     # Signal fort : nom de l'entreprise (score +2, on s'arrête au premier match)
     for pat in _COMPANY_RE:
@@ -243,7 +250,7 @@ def _score_row(row: dict) -> tuple[int, list[str]]:
             score += 2
             break
 
-    # Signal description (score variable, cap à 4 points max depuis la description)
+    # Signal moyen : description (score variable, cap à 4 points max)
     desc_score = 0
     for pat, pts in _DESC_RE:
         if pat.search(description):
@@ -253,9 +260,9 @@ def _score_row(row: dict) -> tuple[int, list[str]]:
                 break
     score += min(desc_score, 4)
 
-    # Signal léger : domaine URL
+    # Signal léger : domaine URL (entreprise, offre, recruteur)
     for domain in RECRUITER_URL_DOMAINS:
-        if domain in url.lower():
+        if domain in url:
             reasons.append(f"url: {domain}")
             score += 1
             break

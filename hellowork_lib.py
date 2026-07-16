@@ -190,6 +190,30 @@ def flatten_standard_job(job: dict) -> dict:
     else:
         skills_str = str(skills) if skills else ""
 
+    # Contact / recruteur
+    hiring = job.get("hiringOrganization") or {}
+    contact_name = (
+        job.get("contactName")
+        or job.get("recruiterName")
+        or job.get("hiringManagerName")
+        or hiring.get("name")
+        or ""
+    )
+    contact_phone = (
+        job.get("contactPhone")
+        or job.get("phone")
+        or job.get("recruiterPhone")
+        or hiring.get("telephone")
+        or ""
+    )
+    contact_email = (
+        job.get("contactEmail")
+        or job.get("email")
+        or job.get("recruiterEmail")
+        or hiring.get("email")
+        or ""
+    )
+
     return {
         "source": "HelloWork",
         "id": job.get("jobId") or job.get("id"),
@@ -197,6 +221,8 @@ def flatten_standard_job(job: dict) -> dict:
         "entreprise": job.get("company"),
         "entreprise_url": job.get("companyUrl"),
         "entreprise_logo": job.get("companyLogo"),
+        "siret": job.get("companySiret") or job.get("siret") or "",
+        "entreprise_description": (job.get("companyDescription") or "")[:400],
         "ville": job.get("city") or job.get("location"),
         "region": job.get("region"),
         "code_postal": job.get("postalCode"),
@@ -222,6 +248,10 @@ def flatten_standard_job(job: dict) -> dict:
         "mots_cles_recherche": job.get("searchQuery"),
         "taille_entreprise": None,
         "effectif_entreprise": None,
+        # Contact recruteur
+        "contact_nom": contact_name,
+        "contact_telephone": contact_phone,
+        "contact_email": contact_email,
         "lien_maps": build_maps_url(job.get("company"), job.get("city") or job.get("location")),
     }
 
@@ -236,38 +266,126 @@ def flatten_enriched_job(job: dict) -> dict:
     headcount = job.get("headcount") or job.get("companyHeadcount") or job.get("employeeCount")
     industry = job.get("industry") or job.get("sector")
 
+    # Dirigeants / contact — on cherche dans plusieurs structures possibles
+    ceo_name = (
+        job.get("ceo")
+        or job.get("ceoName")
+        or job.get("directorName")
+        or job.get("presidentName")
+        or job.get("leaderName")
+        or ""
+    )
+    contact_name = (
+        job.get("contactName")
+        or job.get("recruiterName")
+        or job.get("hiringManagerName")
+        or job.get("managerName")
+        or ""
+    )
+    contact_phone = (
+        job.get("contactPhone")
+        or job.get("phone")
+        or job.get("companyPhone")
+        or job.get("recruiterPhone")
+        or job.get("phoneNumber")
+        or ""
+    )
+    contact_email = (
+        job.get("contactEmail")
+        or job.get("email")
+        or job.get("companyEmail")
+        or job.get("recruiterEmail")
+        or ""
+    )
+
+    # Réseaux sociaux entreprise
+    linkedin_company = (
+        job.get("companyLinkedinUrl")
+        or job.get("linkedinUrl")
+        or job.get("companyLinkedin")
+        or ""
+    )
+    linkedin_contact = (
+        job.get("contactLinkedinUrl")
+        or job.get("recruiterLinkedinUrl")
+        or ""
+    )
+    twitter = job.get("companyTwitter") or job.get("twitter") or ""
+    facebook = job.get("companyFacebook") or job.get("facebook") or ""
+    website = job.get("companyWebsite") or job.get("website") or ""
+
     return {
         "source": "HelloWork",
         "id": job.get("jobKey") or job.get("jobId"),
         "intitule": job.get("title"),
+
+        # Entreprise
         "entreprise": job.get("company"),
         "entreprise_url": job.get("companyUrl"),
         "entreprise_logo": job.get("companyLogo"),
+        "siret": job.get("companySiret") or job.get("siret") or "",
+        "entreprise_description": (job.get("companyDescription") or job.get("aboutCompany") or "")[:400],
+        "site_web_entreprise": website,
+        "linkedin_entreprise": linkedin_company,
+        "twitter_entreprise": twitter,
+        "facebook_entreprise": facebook,
+        "annee_creation_entreprise": job.get("foundedYear") or job.get("companyFoundedYear") or "",
+        "chiffre_affaires_entreprise": job.get("revenue") or job.get("companyRevenue") or "",
+        "secteur_entreprise": industry,
+
+        # Dirigeant
+        "dirigeant_nom": ceo_name,
+        "dirigeant_titre": job.get("ceoTitle") or job.get("leaderTitle") or "",
+        "dirigeant_linkedin": job.get("ceoLinkedinUrl") or job.get("leaderLinkedinUrl") or "",
+
+        # Lieu
         "ville": job.get("location"),
         "region": job.get("locationRegion"),
         "code_postal": job.get("locationPostalCode"),
         "pays": job.get("locationCountry"),
+
+        # Catégories
         "secteur": industry,
         "domaine": job.get("occupationalCategory") or industry,
+
+        # Contrat
         "type_contrat": job.get("contractType"),
         "type_contrat_libelle": job.get("employmentType"),
         "teletravail": job.get("telework"),
+
+        # Salaire
         "salaire_libelle": job.get("salaryText") or job.get("salary"),
         "salaire_min": job.get("salaryMin"),
         "salaire_max": job.get("salaryMax"),
         "salaire_devise": job.get("salaryCurrency"),
         "salaire_periode": job.get("salaryUnit") or job.get("salaryPeriod"),
+
+        # Candidat
         "experience": job.get("experience") or _months_to_label(job.get("experienceMonths")),
         "formation": job.get("educationLevel") or job.get("education"),
         "competences": skills_str,
         "qualifications": job.get("qualifications"),
+
+        # Dates
         "date_publication": job.get("postedAt") or job.get("datePosted"),
         "date_expiration": job.get("validThrough"),
+
+        # Description
         "description": (job.get("descriptionText") or job.get("description") or "")[:800],
         "url": job.get("canonicalUrl") or job.get("jobUrl") or job.get("sourceUrl"),
         "mots_cles_recherche": job.get("searchQuery"),
+
+        # Taille entreprise
         "taille_entreprise": headcount,
         "effectif_entreprise": job.get("companySizeLabel") or job.get("headcountLabel"),
+
+        # Contact recruteur
+        "contact_nom": contact_name,
+        "contact_telephone": contact_phone,
+        "contact_email": contact_email,
+        "contact_linkedin": linkedin_contact,
+
+        # Liens
         "lien_maps": build_maps_url(job.get("company"), job.get("location")),
     }
 
@@ -424,12 +542,31 @@ def resolve_hw_location(text: str) -> tuple[str, bool]:
 
 
 UNIFIED_FIELDNAMES = [
-    "intitule", "entreprise", "ville", "url", "lien_maps",
-    "source", "id", "entreprise_url", "region",
-    "code_postal", "secteur", "domaine", "type_contrat", "teletravail",
-    "salaire_libelle", "salaire_min", "salaire_max", "experience", "formation",
-    "competences", "taille_entreprise", "effectif_entreprise",
-    "date_publication", "description",
+    # Identification
+    "source", "id", "intitule", "url", "date_publication", "date_expiration",
+    # Entreprise
+    "entreprise", "entreprise_url", "entreprise_logo", "siret",
+    "entreprise_description", "site_web_entreprise",
+    "linkedin_entreprise", "twitter_entreprise", "facebook_entreprise",
+    "annee_creation_entreprise", "chiffre_affaires_entreprise",
+    "taille_entreprise", "effectif_entreprise",
+    # Dirigeant
+    "dirigeant_nom", "dirigeant_titre", "dirigeant_linkedin",
+    # Contact recruteur
+    "contact_nom", "contact_telephone", "contact_email", "contact_linkedin",
+    # Lieu
+    "ville", "region", "code_postal", "pays", "lien_maps",
+    # Catégories
+    "secteur", "domaine",
+    # Contrat & conditions
+    "type_contrat", "type_contrat_libelle", "teletravail",
+    "salaire_libelle", "salaire_min", "salaire_max", "salaire_devise", "salaire_periode",
+    # Candidat
+    "experience", "formation", "competences", "qualifications",
+    # Meta
+    "mots_cles_recherche",
+    # Description
+    "description",
 ]
 
 
