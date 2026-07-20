@@ -6,6 +6,21 @@ from typing import Callable, Optional
 from urllib.parse import quote
 
 
+def build_google_dirigeant_url(entreprise: str | None, ville: str | None) -> str:
+    """
+    Construit un lien de recherche Google pour trouver le dirigeant d'une entreprise.
+    Format : https://www.google.com/search?q=Nom+Entreprise+Ville+dirigeant
+    Retourne une chaîne vide si l'un des paramètres est absent ou vide.
+    """
+    nom = (entreprise or "").strip()
+    loc = (ville or "").strip()
+    if not nom:
+        return ""
+    query = f"{nom} {loc} dirigeant".strip() if loc else f"{nom} dirigeant"
+    encoded = quote(query, safe="")
+    return f"https://www.google.com/search?q={encoded}"
+
+
 def build_maps_url(entreprise: str | None, ville: str | None) -> str:
     """
     Construit un lien Google Maps pour rechercher une entreprise dans une ville.

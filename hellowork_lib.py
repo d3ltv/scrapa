@@ -9,7 +9,7 @@ from typing import Optional
 
 import requests
 
-from export_common import export_csv_rows, build_maps_url
+from export_common import export_csv_rows, build_maps_url, build_google_dirigeant_url
 
 ACTOR_STANDARD = "solidcode/hellowork-scraper"
 ACTOR_ENRICHED = "blackfalcondata/hellowork-scraper"
@@ -253,6 +253,7 @@ def flatten_standard_job(job: dict) -> dict:
         "contact_telephone": contact_phone,
         "contact_email": contact_email,
         "lien_maps": build_maps_url(job.get("company"), job.get("city") or job.get("location")),
+        "lien_recherche_dirigeant": build_google_dirigeant_url(job.get("company"), job.get("city") or job.get("location")),
     }
 
 
@@ -387,6 +388,7 @@ def flatten_enriched_job(job: dict) -> dict:
 
         # Liens
         "lien_maps": build_maps_url(job.get("company"), job.get("location")),
+        "lien_recherche_dirigeant": build_google_dirigeant_url(job.get("company"), job.get("location")),
     }
 
 
@@ -555,7 +557,7 @@ UNIFIED_FIELDNAMES = [
     # Contact recruteur
     "contact_nom", "contact_telephone", "contact_email", "contact_linkedin",
     # Lieu
-    "ville", "region", "code_postal", "pays", "lien_maps",
+    "ville", "region", "code_postal", "pays", "lien_maps", "lien_recherche_dirigeant",
     # Catégories
     "secteur", "domaine",
     # Contrat & conditions

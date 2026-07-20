@@ -10,7 +10,7 @@ import re
 import time
 import unicodedata
 import requests
-from export_common import build_maps_url
+from export_common import build_maps_url, build_google_dirigeant_url
 
 TOKEN_URL = "https://entreprise.pole-emploi.fr/connexion/oauth2/access_token?realm=%2Fpartenaire"
 SEARCH_URL = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search"
@@ -181,7 +181,23 @@ def _join_list(items, key=None, sep=", ") -> str:
     return sep.join(str(i) for i in items if i)
 
 
-def flatten_offer(offer: dict) -> dict:
+def _clean_ville(libelle: str | None) -> str | None:
+    """
+    Nettoie le libellé de lieu retourné par l'API France Travail.
+    Exemples :
+      "37 - Tours"                        → "Tours"
+      "75 - Paris 15e Arrondissement"     → "Paris 15e Arrondissement"
+      "69 - Lyon 03"                      → "Lyon 03"
+      "Tours"                             → "Tours"  (inchangé)
+    """
+    if not libelle:
+        return libelle
+    # Pattern : "XX - Ville" ou "XXX - Ville" (codes numériques + 2A + 2B + DOM)
+    cleaned = re.sub(r"^(?:\d{1,3}|2[AB])\s*-\s*", "", libelle).strip()
+    return cleaned if cleaned else libelle
+
+
+
     entreprise = offer.get("entreprise")
     # Robustesse : l'API peut exceptionnellement renvoyer un string au lieu d'un dict
     if not isinstance(entreprise, dict):
@@ -192,7 +208,7 @@ def flatten_offer(offer: dict) -> dict:
     origine = offer.get("origineOffre") or {}
 
     nom_entreprise = entreprise.get("nom")
-    ville_libelle = lieu.get("libelle")
+    ville_libelle = _clean_ville(lieu.get("libelle"))
 
     # Formations : liste de dicts avec niveauLibelle et domaineLibelle
     formations = offer.get("formations") or []
@@ -304,6 +320,7 @@ def flatten_offer(offer: dict) -> dict:
         # --- Description & lien ---
         "description": (offer.get("description") or "").replace("\n", " ")[:800],
         "lien_maps": build_maps_url(nom_entreprise, ville_libelle),
+        "lien_recherche_dirigeant": build_google_dirigeant_url(nom_entreprise, ville_libelle),
     }
 
 
@@ -366,6 +383,7 @@ def flatten_offer_unified(offer: dict) -> dict:
         "contact_url_postuler": row["contact_url_postuler"],
         "contact_commentaire": row["contact_commentaire"],
         "lien_maps": row["lien_maps"],
+        "lien_recherche_dirigeant": row["lien_recherche_dirigeant"],
     }
 
 

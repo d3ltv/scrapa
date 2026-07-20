@@ -30,6 +30,10 @@ from hellowork_lib import (
     HelloWorkError, UNIFIED_FIELDNAMES as HW_UNIFIED_FIELDNAMES,
     resolve_hw_location,
 )
+from indeed_lib import (
+    fetch_indeed_offers, IndeedError,
+    INDEED_DATE_POSTED,
+)
 from seen_ids_cache import filter_new, commit_rows, get_stats, clear_cache, load_seen_ids, get_row_id, archive_csv, list_archives, restore_from_archive, get_archive_stats
 from recruiter_filter import filter_out_recruiters
 from company_search import (
@@ -110,18 +114,9 @@ HW_DATE_POSTED = {
 
 SECTEURS: dict[str, dict] = {
     "BTP / Construction": {
-        "naf": [
-            "41", "42", "43",        # Construction générale, génie civil, travaux spécialisés
-            "2311", "2312", "2320",  # Verre, céramique
-            "2351", "2352",          # Ciment, béton
-            "4669",                  # Négoce matériaux
-            "7111", "7112",          # Architecture, ingénierie
-            "4312", "4313",          # Terrassement, forages
-            "4321", "4322", "4329",  # Électricité, plomberie, autres install.
-            "4331", "4332", "4333",  # Plâtrerie, menuiserie, revêtements
-            "4334", "4339",          # Peinture, finitions
-            "4391", "4399",          # Couverture, autres travaux spécialisés
-        ],
+        "naf": ["41", "42", "43", "23", "71"],
+        # 41=Construction bâtiments, 42=Génie civil, 43=Travaux spécialisés,
+        # 23=Matériaux (verre/ciment/céramique), 71=Architecture et ingénierie
         "keywords": [
             # Gros œuvre
             "maçon", "maçon coffreur", "coffreur bancheur", "ferrailleur",
@@ -147,10 +142,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Restauration / Hôtellerie": {
-        "naf": [
-            "5610", "5621", "5629", "5630",  # Restaurants, traiteurs, débits de boissons
-            "5510", "5520", "5530", "5590",  # Hébergement
-        ],
+        "naf": ["56", "55"],
+        # 56=Restauration, 55=Hébergement
         "keywords": [
             "cuisinier", "chef cuisinier", "commis de cuisine", "pâtissier",
             "boulanger", "serveur", "barman", "réceptionniste hôtel",
@@ -160,13 +153,9 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Transport / Logistique": {
-        "naf": [
-            "4941", "4942",          # Transport routier marchandises et voyageurs
-            "5010", "5020", "5030",  # Transport maritime et fluvial
-            "5110", "5121",          # Transport aérien
-            "5210", "5224", "5229",  # Entreposage, manutention
-            "5320",                  # Autres activités de poste et courrier
-        ],
+        "naf": ["49", "50", "51", "52", "53"],
+        # 49=Transport terrestre, 50=Transport eau, 51=Transport aérien,
+        # 52=Entreposage et auxiliaires, 53=Poste et courrier
         "keywords": [
             "chauffeur poids lourd", "chauffeur SPL", "chauffeur livreur",
             "conducteur transport", "logisticien", "préparateur commandes",
@@ -176,11 +165,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Informatique / Tech": {
-        "naf": [
-            "6201", "6202", "6203", "6209",  # Programmation, conseil informatique
-            "6311", "6312",                  # Traitement données, hébergement
-            "6201", "7022",                  # Conseil ingénierie
-        ],
+        "naf": ["62", "63"],
+        # 62=Programmation et conseil informatique, 63=Services d'information
         "keywords": [
             "développeur", "développeur web", "développeur Python", "développeur Java",
             "développeur React", "ingénieur logiciel", "DevOps", "SRE",
@@ -191,21 +177,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Commerce / Vente": {
-        "naf": [
-            "4711", "4719", "4721", "4722", "4723", "4724", "4725",
-            "4726", "4727", "4729", "4730", "4741", "4742", "4743",
-            "4751", "4752", "4753", "4754", "4759", "4761", "4762",
-            "4763", "4764", "4765", "4771", "4772", "4773", "4774",
-            "4775", "4776", "4777", "4778", "4779", "4781", "4782",
-            "4789", "4791", "4799",  # Commerce de détail
-            "4611", "4612", "4613", "4614", "4615", "4616", "4617",
-            "4618", "4619", "4621", "4622", "4623", "4624", "4631",
-            "4632", "4633", "4634", "4635", "4636", "4637", "4638",
-            "4639", "4641", "4642", "4643", "4644", "4645", "4646",
-            "4647", "4648", "4649", "4651", "4652", "4661", "4662",
-            "4663", "4664", "4665", "4666", "4669", "4671", "4672",
-            "4673", "4674", "4675", "4676", "4677",  # Commerce de gros
-        ],
+        "naf": ["46", "47"],
+        # 46=Commerce de gros, 47=Commerce de détail
         "keywords": [
             "vendeur", "conseiller de vente", "commercial", "technico-commercial",
             "responsable des ventes", "chef des ventes", "directeur commercial",
@@ -216,9 +189,9 @@ SECTEURS: dict[str, dict] = {
     },
     "Santé / Médico-social": {
         "naf": [
-            "8610", "8621", "8622", "8623", "8690",  # Activités hospitalières, médecins, dentistes
-            "8710", "8720", "8730", "8790",           # Hébergement médico-social
-            "8810", "8891", "8899",                   # Action sociale sans hébergement
+            "86",   # Activités pour la santé humaine
+            "87",   # Hébergement médico-social et social
+            "88",   # Action sociale sans hébergement
         ],
         "keywords": [
             "infirmier", "infirmière", "aide-soignant", "médecin",
@@ -227,14 +200,39 @@ SECTEURS: dict[str, dict] = {
             "aide à domicile", "éducateur spécialisé", "moniteur éducateur",
             "assistant social", "sage-femme", "radiologue", "anesthésiste",
             "urgentiste", "directeur EHPAD", "coordinateur soins",
+            # Mots-clés EHPAD / personnes âgées
+            "aide-soignant EHPAD", "infirmier EHPAD", "animateur EHPAD",
+            "responsable EHPAD", "directeur maison de retraite",
+            "agent de soins", "ASH", "faisant-fonction aide-soignant",
+            "accompagnant éducatif et social", "AES", "AESH",
         ],
     },
     "Industrie / Production": {
         "naf": [
-            "10", "11", "12", "13", "14", "15",      # Agroalimentaire, boissons, textile
-            "16", "17", "18", "19", "20", "21",      # Bois, papier, chimie, pharma
-            "22", "23", "24", "25", "26", "27",      # Plastique, verre, métal, électronique
-            "28", "29", "30", "31", "32", "33",      # Machines, autos, meubles, réparation
+            "10",   # Industries alimentaires (agroalimentaire, viande, autres produits)
+            "11",   # Fabrication de boissons
+            "12",   # Fabrication de produits à base de tabac
+            "13",   # Fabrication de textiles
+            "14",   # Industrie de l'habillement
+            "15",   # Industrie du cuir et de la chaussure
+            "16",   # Travail du bois
+            "17",   # Industrie du papier et du carton
+            "18",   # Imprimerie
+            "19",   # Cokéfaction et raffinage
+            "20",   # Industrie chimique
+            "21",   # Industrie pharmaceutique
+            "22",   # Fabrication caoutchouc et plastique (plasturgie)
+            "23",   # Fabrication d'autres produits minéraux non métalliques
+            "24",   # Métallurgie
+            "25",   # Fabrication de produits métalliques (usinage, chaudronnerie, décolletage)
+            "26",   # Fabrication produits informatiques, électroniques
+            "27",   # Fabrication d'équipements électriques
+            "28",   # Fabrication de machines et équipements (machines-outils)
+            "29",   # Industrie automobile
+            "30",   # Fabrication d'autres matériels de transport
+            "31",   # Fabrication de meubles
+            "32",   # Autres industries manufacturières
+            "33",   # Réparation et installation de machines et d'équipements
         ],
         "keywords": [
             "opérateur de production", "conducteur de ligne", "technicien de maintenance",
@@ -242,18 +240,28 @@ SECTEURS: dict[str, dict] = {
             "chaudronnier", "ajusteur", "électrotechnicien", "automaticien",
             "ingénieur production", "responsable qualité", "contrôleur qualité",
             "chef d'équipe production", "technicien méthodes", "ingénieur process",
+            # Mécanique industrielle / usinage (25.62B — coup de cœur)
+            "usineur", "technicien usinage", "programmeur CNC", "opérateur CNC",
+            "tourneur", "fraiseur", "rectifieur", "ajusteur monteur",
+            "technicien bureau d'études industriel", "dessinateur industriel",
+            "responsable atelier usinage", "chef d'atelier mécanique",
+            "technicien maintenance industrielle", "automaticien",
+            # Métallurgie / chaudronnerie (25.11Z, 25.62A)
+            "chaudronnier", "tuyauteur", "soudeur chaudronnier", "traceur chaudronnier",
+            "soudeur TIG", "soudeur MIG", "soudeur semi-automatique",
+            "décolleteur", "régleur décolletage", "opérateur décolletage",
+            # Plasturgie (22.21Z, 22.29A)
+            "opérateur plasturgie", "régleur plasturgie", "technicien plasturgie",
+            "responsable qualité plasturgie", "ingénieur plasturgie",
+            # Agroalimentaire (10.89Z, 10.13A)
+            "opérateur agroalimentaire", "conducteur de ligne agroalimentaire",
+            "technicien qualité agroalimentaire", "responsable production agroalimentaire",
+            "boucher industriel", "opérateur découpe viande",
         ],
     },
     "Agriculture / Espaces verts": {
-        "naf": [
-            "0111", "0112", "0113", "0114", "0115", "0116", "0119",  # Cultures
-            "0121", "0122", "0123", "0124", "0125", "0126", "0127",  # Cultures permanentes
-            "0128", "0129",
-            "0130", "0141", "0142", "0143", "0144", "0145", "0146",  # Élevage
-            "0147", "0149", "0150", "0161", "0162", "0163", "0164",
-            "0170", "0210", "0220", "0230", "0240",                   # Sylviculture
-            "8130",                                                    # Services paysage / jardins
-        ],
+        "naf": ["01", "02", "03", "81"],
+        # 01=Culture et élevage, 02=Sylviculture, 03=Pêche, 81=Services bâtiments/paysage
         "keywords": [
             "agriculteur", "maraîcher", "arboriculteur", "viticulteur",
             "ouvrier agricole", "technicien agricole", "jardinier",
@@ -263,11 +271,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Finance / Banque / Assurance": {
-        "naf": [
-            "6411", "6419", "6420", "6430", "6491", "6492", "6499",  # Banque, finance
-            "6511", "6512", "6521", "6522",                           # Assurance
-            "6611", "6612", "6619", "6621", "6622", "6629", "6630",  # Auxiliaires finance/assurance
-        ],
+        "naf": ["64", "65", "66"],
+        # 64=Services financiers, 65=Assurance, 66=Auxiliaires financiers/assurance
         "keywords": [
             "conseiller bancaire", "gestionnaire de patrimoine", "analyste financier",
             "contrôleur de gestion", "comptable", "expert-comptable", "auditeur",
@@ -277,12 +282,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Éducation / Formation": {
-        "naf": [
-            "8510", "8520", "8531", "8532",  # Enseignement primaire, secondaire
-            "8541", "8542",                  # Enseignement supérieur
-            "8551", "8552", "8553", "8559",  # Formation continue, conduite, autres
-            "8560",                          # Activités de soutien
-        ],
+        "naf": ["85"],
+        # 85=Enseignement (primaire, secondaire, supérieur, formation continue)
         "keywords": [
             "enseignant", "professeur", "instituteur", "formateur",
             "conseiller pédagogique", "directeur d'école", "CPE",
@@ -291,7 +292,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Immobilier": {
-        "naf": ["6810", "6820", "6831", "6832"],
+        "naf": ["68"],
+        # 68=Activités immobilières (agences 68.31Z, gestion 68.20, promotion 68.10)
         "keywords": [
             "agent immobilier", "négociateur immobilier", "conseiller immobilier",
             "gestionnaire locatif", "property manager", "syndic de copropriété",
@@ -300,7 +302,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Juridique / Droit": {
-        "naf": ["6910", "6920"],
+        "naf": ["69"],
+        # 69=Activités juridiques et comptables
         "keywords": [
             "juriste", "avocat", "notaire", "huissier", "greffier",
             "juriste d'entreprise", "juriste droit social", "juriste droit des affaires",
@@ -309,7 +312,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Marketing / Communication": {
-        "naf": ["7311", "7312", "7021", "7022", "6391", "6399"],
+        "naf": ["73", "70"],
+        # 73=Publicité et études de marché, 70=Conseil de gestion
         "keywords": [
             "chargé de communication", "responsable marketing", "chef de projet marketing",
             "community manager", "content manager", "traffic manager",
@@ -319,7 +323,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Ressources Humaines": {
-        "naf": ["7810", "7820", "7830"],
+        "naf": ["78"],
+        # 78=Activités liées à l'emploi (intérim, recrutement, placement)
         "keywords": [
             "chargé RH", "responsable RH", "DRH", "gestionnaire paie",
             "responsable paie", "chargé de recrutement", "talent acquisition",
@@ -328,7 +333,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Hôpital / Urgences / Bloc": {
-        "naf": ["8610"],
+        "naf": ["86"],
+        # 86=Activités pour la santé humaine (hôpitaux, cliniques, cabinets)
         "keywords": [
             "infirmier bloc opératoire", "IBODE", "IADE", "infirmier urgences",
             "aide-soignant urgences", "brancardier", "ambulancier",
@@ -338,11 +344,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Énergie / Environnement": {
-        "naf": [
-            "3511", "3512", "3513", "3514",
-            "3521", "3522", "3523",
-            "3600", "3811", "3812", "3821", "3822", "3900", "7112",
-        ],
+        "naf": ["35", "36", "37", "38", "39"],
+        # 35=Énergie (électricité, gaz), 36=Eau, 37=Eaux usées, 38=Déchets, 39=Dépollution
         "keywords": [
             "technicien énergie", "ingénieur énergie", "électricien industriel",
             "technicien photovoltaïque", "installateur solaire",
@@ -353,7 +356,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Sécurité / Gardiennage": {
-        "naf": ["8010", "8020", "8030"],
+        "naf": ["80"],
+        # 80=Enquêtes et sécurité (gardiennage, surveillance, systèmes sécurité)
         "keywords": [
             "agent de sécurité", "agent de surveillance", "vigile",
             "agent cynophile", "agent de sûreté", "responsable sécurité",
@@ -364,8 +368,8 @@ SECTEURS: dict[str, dict] = {
     },
     "Automobile / Mécanique": {
         "naf": [
-            "2910", "2920", "2931", "2932",
-            "4511", "4519", "4520", "4531", "4532", "4540",
+            "29",   # Industrie automobile (fabrication)
+            "45",   # Commerce et réparation d'automobiles et de motocycles (concessions + entretien)
         ],
         "keywords": [
             "mécanicien automobile", "technicien automobile", "carrossier",
@@ -373,10 +377,17 @@ SECTEURS: dict[str, dict] = {
             "réceptionnaire après-vente", "chef d'atelier automobile",
             "vendeur automobile", "conseiller commercial automobiles",
             "préparateur véhicule", "mécanicien poids lourd", "technicien diagnostic",
+            # Concessions (45.11Z)
+            "conseiller commercial véhicules neufs", "conseiller commercial véhicules occasion",
+            "directeur commercial concession", "responsable après-vente",
+            "directeur de concession", "chef des ventes automobiles",
+            "gestionnaire de parc automobile", "fleet manager",
         ],
     },
     "Aéronautique / Défense": {
-        "naf": ["3030", "3315", "8422"],
+        "naf": ["30", "33", "84"],
+        # 30=Fabrication autres matériels de transport (aéronefs), 33=Réparation/maintenance,
+        # 84=Administration publique et défense
         "keywords": [
             "technicien aéronautique", "mécanicien aéronautique", "ingénieur aéronautique",
             "technicien de maintenance avion", "agent piste", "agent escale",
@@ -386,10 +397,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Tourisme / Loisirs / Sport": {
-        "naf": [
-            "7911", "7912", "7990",
-            "9311", "9312", "9313", "9319", "9321", "9329",
-        ],
+        "naf": ["79", "93"],
+        # 79=Agences de voyage et voyagistes, 93=Activités sportives et de loisirs
         "keywords": [
             "agent de voyage", "conseiller voyages", "chef de produit tourisme",
             "guide touristique", "accompagnateur tourisme", "animateur vacances",
@@ -399,7 +408,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Nettoyage / Propreté": {
-        "naf": ["8121", "8122", "8129"],
+        "naf": ["81"],
+        # 81=Services relatifs aux bâtiments et aménagement paysager (nettoyage inclus)
         "keywords": [
             "agent de nettoyage", "agent de propreté", "technicien de surface",
             "responsable nettoyage", "chef d'équipe propreté",
@@ -408,11 +418,9 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Audiovisuel / Médias / Culture": {
-        "naf": [
-            "5911", "5912", "5913", "5914", "5920",
-            "6010", "6020",
-            "9001", "9002", "9003", "9004",
-        ],
+        "naf": ["59", "60", "90", "91"],
+        # 59=Production cinéma/vidéo/musique, 60=Programmation/diffusion,
+        # 90=Arts et spectacle, 91=Bibliothèques et musées
         "keywords": [
             "journaliste", "rédacteur", "présentateur", "caméraman",
             "monteur vidéo", "chef opérateur", "réalisateur",
@@ -422,7 +430,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Conseil / Management": {
-        "naf": ["7021", "7022", "6920", "8299"],
+        "naf": ["70"],
+        # 70=Activités des sièges sociaux et conseil de gestion
         "keywords": [
             "consultant", "consultant en management", "manager de transition",
             "chef de projet", "directeur de projet", "PMO",
@@ -431,7 +440,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Supply Chain / Achats": {
-        "naf": ["4619", "4631", "4632", "4633", "5210", "5224", "5229"],
+        "naf": ["46", "52"],
+        # 46=Commerce de gros (approvisionnement), 52=Entreposage et auxiliaires transports
         "keywords": [
             "acheteur", "responsable achats", "directeur achats",
             "approvisionneur", "responsable approvisionnement",
@@ -442,7 +452,8 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Informatique / Réseaux / Télécom": {
-        "naf": ["6110", "6120", "6130", "6190", "6201", "6202", "6203", "6209"],
+        "naf": ["61", "62"],
+        # 61=Télécommunications, 62=Programmation et conseil informatique
         "keywords": [
             "technicien réseau", "administrateur réseau", "ingénieur télécoms",
             "technicien télécom", "intégrateur réseaux", "NOC engineer",
@@ -452,27 +463,35 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Comptabilité / Gestion": {
-        "naf": ["6920"],
+        "naf": ["69"],  # Activités juridiques et comptables (cabinets d'expertise comptable inclus)
         "keywords": [
             "comptable", "comptable général", "comptable fournisseurs",
             "comptable clients", "assistant comptable", "chef comptable",
             "expert-comptable", "contrôleur de gestion", "analyste financier",
             "trésorier", "responsable administratif et financier", "DAF",
             "auditeur interne", "auditeur externe", "responsable consolidation",
+            "collaborateur comptable", "collaborateur comptable junior",
+            "collaborateur comptable senior", "gestionnaire de paie",
+            "responsable paie cabinet", "directeur de mission",
+            "associé cabinet comptable", "manager audit",
         ],
     },
     "Services à la personne": {
-        "naf": ["8810", "8891", "8899", "9601", "9602", "9609"],
+        "naf": ["88", "96"],  # Action sociale sans hébergement + Autres services personnels
         "keywords": [
             "aide à domicile", "auxiliaire de vie", "assistant de vie",
             "garde d'enfants", "nounou", "auxiliaire parentale",
             "accompagnant personnes handicapées", "ADVF",
             "responsable secteur aide à domicile", "coordinateur services",
             "employé familial", "femme de ménage", "homme toutes mains",
+            "directeur structure aide à domicile", "responsable agence SAP",
+            "directeur services à la personne", "manager SAP",
+            "responsable qualité aide à domicile",
         ],
     },
     "Naval / Maritime": {
-        "naf": ["3011", "3012", "5010", "5020", "5030"],
+        "naf": ["30", "50"],
+        # 30=Fabrication matériels de transport (naval), 50=Transport par eau
         "keywords": [
             "marin", "matelot", "officier de port", "capitaine",
             "mécanicien naval", "technicien naval", "soudeur naval",
@@ -482,13 +501,56 @@ SECTEURS: dict[str, dict] = {
         ],
     },
     "Pharmacie / Cosmétique / Chimie": {
-        "naf": ["2011", "2012", "2013", "2014", "2020", "2110", "2120"],
+        "naf": ["20", "21"],
+        # 20=Industrie chimique (cosmétique inclus), 21=Industrie pharmaceutique
         "keywords": [
             "pharmacien", "préparateur en pharmacie", "responsable assurance qualité",
             "ingénieur chimiste", "technicien laboratoire", "technicien qualité",
             "responsable production pharmaceutique", "ingénieur procédés",
             "chef de produit cosmétique", "formateur cosmétique",
             "regulatory affairs", "affaires réglementaires",
+        ],
+    },
+    "Mécanique industrielle / Usinage": {
+        "naf": [
+            "25",   # Fabrication de produits métalliques (mécanique, usinage, décolletage, structures)
+            "28",   # Fabrication de machines et équipements n.c.a. (machines-outils)
+            "33",   # Réparation et installation de machines et équipements
+        ],
+        "keywords": [
+            "usineur", "tourneur fraiseur", "opérateur CNC", "programmeur CNC",
+            "technicien usinage", "régleur sur CN", "opérateur commande numérique",
+            "rectifieur", "électroérosioniste", "opérateur laser",
+            "ajusteur monteur", "ajusteur outilleur", "metteur au point",
+            "responsable atelier usinage", "chef d'atelier mécanique",
+            "dessinateur industriel", "technicien bureau d'études mécanique",
+            "ingénieur méthodes", "technicien méthodes usinage",
+            "responsable production mécanique", "directeur industriel",
+            "technicien maintenance industrielle", "technicien de maintenance",
+            "technicien automatisme", "automaticien", "technicien électromécanique",
+            "décolleteur", "régleur décolletage", "opérateur décolletage",
+            "chaudronnier", "chaudronnier soudeur", "soudeur TIG", "soudeur MIG",
+            "soudeur semi-automatique", "tuyauteur industriel",
+            "technicien machines-outils", "ingénieur machines-outils",
+        ],
+    },
+    "EHPAD / Maisons de retraite": {
+        "naf": ["87"],  # Hébergement médico-social et social (EHPAD, résidences personnes âgées)
+        "keywords": [
+            "infirmier EHPAD", "aide-soignant EHPAD", "infirmière coordinatrice",
+            "IDEC", "médecin coordonnateur", "médecin EHPAD",
+            "kinésithérapeute EHPAD", "ergothérapeute EHPAD", "psychologue EHPAD",
+            "agent de soins", "ASH", "faisant-fonction aide-soignant",
+            "animateur EHPAD", "animateur maison de retraite",
+            "assistant de soins en gérontologie", "ASG",
+            "accompagnant éducatif et social", "AES",
+            "responsable hôtellerie EHPAD", "agent hôtelier",
+            "cuisinier EHPAD", "responsable restauration EHPAD",
+            "directeur EHPAD", "directeur maison de retraite",
+            "directeur résidence seniors", "directeur résidence autonomie",
+            "directeur adjoint EHPAD", "responsable secteur EHPAD",
+            "cadre de santé EHPAD", "responsable qualité EHPAD",
+            "responsable RH EHPAD", "directeur des soins",
         ],
     },
 }
@@ -689,6 +751,7 @@ class App(tk.Tk):
         self.ft_contract_vars: dict[str, tk.BooleanVar] = {}
         self._ft_widgets: list = []
         self._hw_widgets: list = []
+        self._indeed_widgets: list = []
         self._res_sort_col: str | None = None
         self._res_sort_asc: bool = True
         self._res_filtered: list[dict] = []
@@ -1232,6 +1295,7 @@ class App(tk.Tk):
         self._build_credentials()
         self._build_ft_section()
         self._build_hw_section()
+        self._build_indeed_section()
         self._build_post_section()
         self._build_actions()
         self._build_log()
@@ -1891,6 +1955,7 @@ class App(tk.Tk):
 
         self.last_output_path = output_path
         self._open_btn.configure(state="normal")
+        self._enrich_btn.configure(state="normal")
         self._status_var.set(f"✅  {count} offres exportées  —  {output_path}")
         self._log_msg(f"💾 {count} offres enregistrées → {output_path}")
         self._update_results_count(len(self._pending_rows))
@@ -1981,16 +2046,14 @@ class App(tk.Tk):
         e.pack(side="left")
         self._ft_widgets.append(e)
 
-        c = self._field_row(lf, "Secteur", "remplace les mots-clés si rempli")
-        self.ft_secteur_var = tk.StringVar(value="(aucun)")
-        ft_sect_cb = ttk.Combobox(c, textvariable=self.ft_secteur_var,
-                                   values=SECTEUR_CHOICES, state="readonly", width=28)
-        ft_sect_cb.pack(side="left", padx=(0, 8))
-        self._ft_widgets.append(ft_sect_cb)
+        c = self._field_row(lf, "Secteurs", "＋ pour ajouter · plusieurs secteurs = requêtes cumulées")
+        self._ft_secteurs = TagList(c, choices=sorted(SECTEURS.keys()))
+        self._ft_secteurs.pack(side="left", fill="x", expand=True)
+        self._ft_secteurs.bind_change(self._on_ft_secteur_change)
+        self._ft_widgets.append(self._ft_secteurs)
         self._ft_secteur_info = tk.Label(c, text="", bg=self._CARD, fg=self._FG_MUTED,
                                           font=self._font(9))
-        self._ft_secteur_info.pack(side="left")
-        ft_sect_cb.bind("<<ComboboxSelected>>", self._on_ft_secteur_change)
+        self._ft_secteur_info.pack(side="left", padx=(8, 0))
 
         c = self._field_row(lf, "Villes / Dépts", "Tours, 37, Paris…  ＋ pour ajouter")
         self._ft_locations = TagList(c, freetext=True)
@@ -2054,16 +2117,14 @@ class App(tk.Tk):
         kw_e.pack(side="left")
         self._hw_widgets.append(kw_e)
 
-        c = self._field_row(lf, "Secteur", "envoie les métiers du secteur auto")
-        self.hw_secteur_var = tk.StringVar(value="(aucun)")
-        hw_sect_cb = ttk.Combobox(c, textvariable=self.hw_secteur_var,
-                                   values=SECTEUR_CHOICES, state="readonly", width=28)
-        hw_sect_cb.pack(side="left", padx=(0, 8))
-        self._hw_widgets.append(hw_sect_cb)
+        c = self._field_row(lf, "Secteurs", "＋ pour ajouter · plusieurs secteurs = requêtes cumulées")
+        self._hw_secteurs = TagList(c, choices=sorted(SECTEURS.keys()))
+        self._hw_secteurs.pack(side="left", fill="x", expand=True)
+        self._hw_secteurs.bind_change(self._on_hw_secteur_change)
+        self._hw_widgets.append(self._hw_secteurs)
         self._hw_secteur_info = tk.Label(c, text="", bg=self._CARD, fg=self._FG_MUTED,
                                           font=self._font(9))
-        self._hw_secteur_info.pack(side="left")
-        hw_sect_cb.bind("<<ComboboxSelected>>", self._on_hw_secteur_change)
+        self._hw_secteur_info.pack(side="left", padx=(8, 0))
 
         c = self._field_row(lf, "Lieu", "Tours, Lyon, 37, 37000…")
         self.hw_location_var = tk.StringVar()
@@ -2111,6 +2172,60 @@ class App(tk.Tk):
         tk.Label(c, text="(1 run Apify par groupe — plus précis, plus lent)",
                  bg=self._CARD, fg=self._FG_MUTED,
                  font=self._font(9)).pack(side="left", padx=(8, 0))
+
+        tk.Frame(lf, bg=self._CARD, height=6).pack()
+
+    # ------------------------------------------------------------------
+    # Indeed section
+    # ------------------------------------------------------------------
+
+    def _build_indeed_section(self):
+        lf = self._card("🔵  Indeed  (via Apify)")
+
+        en_row = tk.Frame(lf, bg=self._CARD)
+        en_row.pack(fill="x", padx=12, pady=(4, 2))
+        self.use_indeed_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            en_row, text="Activer cette source",
+            variable=self.use_indeed_var,
+            bg=self._CARD, fg=self._FG, activebackground=self._CARD,
+            selectcolor=self._CARD,
+            command=self._toggle_indeed_fields,
+        ).pack(side="left")
+
+        c = self._field_row(lf, "Mots-clés", "ex: développeur, plombier, chef de chantier")
+        self.indeed_keywords_var = tk.StringVar()
+        kw_e = ttk.Entry(c, textvariable=self.indeed_keywords_var, width=40)
+        kw_e.pack(side="left")
+        self._indeed_widgets.append(kw_e)
+
+        c = self._field_row(lf, "Lieu", "Tours, Lyon, Paris, 37000…")
+        self.indeed_location_var = tk.StringVar()
+        loc_e = ttk.Entry(c, textvariable=self.indeed_location_var, width=22)
+        loc_e.pack(side="left")
+        self._indeed_widgets.append(loc_e)
+
+        c = self._field_row(lf, "Publiée depuis")
+        self.indeed_date_var = tk.StringVar(value="Toutes dates")
+        date_cb = ttk.Combobox(
+            c, textvariable=self.indeed_date_var,
+            values=list(INDEED_DATE_POSTED.keys()), state="readonly", width=16,
+        )
+        date_cb.pack(side="left")
+        self._indeed_widgets.append(date_cb)
+
+        c = self._field_row(lf, "Max résultats", "max 1000 via Apify")
+        self.indeed_max_var = tk.StringVar(value="100")
+        max_e = ttk.Entry(c, textvariable=self.indeed_max_var, width=7)
+        max_e.pack(side="left")
+        self._indeed_widgets.append(max_e)
+
+        # Désactivé par défaut
+        for w in self._indeed_widgets:
+            try:
+                w.configure(state="disabled")
+            except tk.TclError:
+                pass
 
         tk.Frame(lf, bg=self._CARD, height=6).pack()
 
@@ -2194,7 +2309,13 @@ class App(tk.Tk):
             f, text="📂  Ouvrir dernier export",
             command=self._open_last_csv, state="disabled",
         )
-        self._open_btn.pack(side="left")
+        self._open_btn.pack(side="left", padx=(0, 10))
+
+        self._enrich_btn = ttk.Button(
+            f, text="📞  Enrichir tél. (Pages Jaunes)",
+            command=self._enrich_last_csv, state="disabled",
+        )
+        self._enrich_btn.pack(side="left")
 
     # ------------------------------------------------------------------
     # Log / status (inside search page)
@@ -2323,23 +2444,23 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
 
     def _on_ft_secteur_change(self, event=None):
-        s = self.ft_secteur_var.get()
-        if s == "(aucun)" or s not in SECTEURS:
+        tags = self._ft_secteurs.get_tags()
+        if not tags:
             self._ft_secteur_info.configure(text="")
         else:
-            n = len(SECTEURS[s]["naf"])
+            total_naf = sum(len(SECTEURS[s]["naf"]) for s in tags if s in SECTEURS)
             self._ft_secteur_info.configure(
-                text=f"{n} codes NAF · filtre secteur API"
+                text=f"{len(tags)} secteur(s) · {total_naf} requête(s) NAF"
             )
 
     def _on_hw_secteur_change(self, event=None):
-        s = self.hw_secteur_var.get()
-        if s == "(aucun)" or s not in SECTEURS:
+        tags = self._hw_secteurs.get_tags()
+        if not tags:
             self._hw_secteur_info.configure(text="")
         else:
-            n = len(SECTEURS[s]["keywords"])
+            total_kw = sum(len(SECTEURS[s]["keywords"]) for s in tags if s in SECTEURS)
             self._hw_secteur_info.configure(
-                text=f"{n} métiers envoyés en recherche"
+                text=f"{len(tags)} secteur(s) · {total_kw} mots-clés"
             )
 
     # ------------------------------------------------------------------
@@ -2354,10 +2475,20 @@ class App(tk.Tk):
             except tk.TclError:
                 pass
         self._ft_locations.configure_state(state)
+        self._ft_secteurs.configure_state(state)
 
     def _toggle_hw_fields(self):
         state = "normal" if self.use_hw_var.get() else "disabled"
         for w in self._hw_widgets:
+            try:
+                w.configure(state=state)
+            except tk.TclError:
+                pass
+        self._hw_secteurs.configure_state(state)
+
+    def _toggle_indeed_fields(self):
+        state = "normal" if self.use_indeed_var.get() else "disabled"
+        for w in self._indeed_widgets:
             try:
                 w.configure(state=state)
             except tk.TclError:
@@ -2411,6 +2542,7 @@ class App(tk.Tk):
                     if payload:
                         self.last_output_path = payload
                         self._open_btn.configure(state="normal")
+                        self._enrich_btn.configure(state="normal")
                         self._status_var.set(f"✅  Export terminé  —  {payload}")
                     else:
                         self._status_var.set("Aucune offre trouvée.")
@@ -2538,6 +2670,33 @@ class App(tk.Tk):
                             self._cs_open_btn.configure(state="normal")
                     except Exception:
                         pass
+                elif kind == "enrich_done":
+                    # Fin enrichissement Pages Jaunes
+                    enrich_path, count = payload
+                    self._enrich_btn.configure(state="normal")
+                    self._status_var.set(
+                        f"✅  Enrichissement terminé — {count} tél. trouvé(s) → {os.path.basename(enrich_path)}"
+                    )
+                    self._log_msg(f"📞 Enrichissement terminé : {count} téléphone(s) → {enrich_path}")
+                    if os.path.exists(enrich_path):
+                        if messagebox.askyesno(
+                            "Enrichissement terminé",
+                            f"{count} numéro(s) de téléphone ajouté(s).\n\n"
+                            f"Fichier : {os.path.basename(enrich_path)}\n\n"
+                            "Ouvrir le fichier enrichi ?",
+                            parent=self,
+                        ):
+                            if sys.platform == "darwin":
+                                subprocess.run(["open", enrich_path], check=False)
+                            elif sys.platform.startswith("win"):
+                                os.startfile(enrich_path)  # noqa: S606
+                            else:
+                                subprocess.run(["xdg-open", enrich_path], check=False)
+                elif kind == "enrich_error":
+                    self._enrich_btn.configure(state="normal")
+                    self._status_var.set("❌  Enrichissement échoué")
+                    self._log_msg(f"❌ Erreur enrichissement : {payload}")
+                    messagebox.showerror("Erreur enrichissement", str(payload), parent=self)
         except queue.Empty:
             pass
         self.after(100, self._poll_queue)
@@ -2656,15 +2815,16 @@ class App(tk.Tk):
                         codes.append(code)
             base["typeContrat"] = ",".join(codes)
 
-        # Secteur prédéfini → on utilise les mots-clés métiers (comme HW)
-        # secteurActivite est abandonné car l'API exige des codes NAF précis
-        # et accepte seulement 2 codes max, ce qui est trop limitant.
-        ft_secteur = self.ft_secteur_var.get()
-        kw_groups: list[str] = []  # chaque élément = un mot-clé pour motsCles
-        if ft_secteur != "(aucun)" and ft_secteur in SECTEURS:
-            sector_kw = SECTEURS[ft_secteur]["keywords"]
-            kw_groups = sector_kw
-            base.pop("motsCles", None)  # le secteur remplace les mots-clés manuels
+        # Secteurs sélectionnés → requêtes par code NAF via secteurActivite (une par code)
+        # Plusieurs secteurs = union des codes NAF, une requête par code.
+        # Les mots-clés manuels sont conservés en complément sur chaque requête.
+        selected_secteurs = self._ft_secteurs.get_tags()
+        naf_codes: list[str] = []
+        for s in selected_secteurs:
+            if s in SECTEURS:
+                for code in SECTEURS[s]["naf"]:
+                    if code not in naf_codes:
+                        naf_codes.append(code)
 
         # Localisations
         locs = self._ft_locations.get_tags()
@@ -2673,11 +2833,11 @@ class App(tk.Tk):
         result = []
         seen: set[str] = set()
 
-        if kw_groups:
-            # Une requête par mot-clé × localisation
-            for kw in kw_groups:
+        if naf_codes:
+            # Une requête par code NAF × localisation
+            for naf in naf_codes:
                 for lp in loc_params:
-                    p = {**base, "motsCles": kw, **lp}
+                    p = {**base, "secteurActivite": naf, **lp}
                     key = str(sorted(p.items()))
                     if key not in seen:
                         seen.add(key)
@@ -2741,9 +2901,10 @@ class App(tk.Tk):
         self._launch_search(clear_log=False)
 
     def _launch_search(self, clear_log: bool = True):
-        use_ft = self.use_ft_var.get()
-        use_hw = self.use_hw_var.get()
-        if not use_ft and not use_hw:
+        use_ft     = self.use_ft_var.get()
+        use_hw     = self.use_hw_var.get()
+        use_indeed = self.use_indeed_var.get()
+        if not use_ft and not use_hw and not use_indeed:
             messagebox.showwarning("Sources", "Active au moins une source.")
             return
 
@@ -2755,23 +2916,29 @@ class App(tk.Tk):
         ft_has_criteria = bool(
             self.ft_mots_var.get().strip()
             or self._ft_locations.get_tags()
-            or self.ft_secteur_var.get() != "(aucun)"
+            or self._ft_secteurs.get_tags()
         )
         hw_has_criteria = bool(
             self.hw_keywords_var.get().strip()
             or self.hw_location_var.get().strip()
-            or self.hw_secteur_var.get() != "(aucun)"
+            or self._hw_secteurs.get_tags()
+        )
+        indeed_has_criteria = bool(
+            self.indeed_keywords_var.get().strip()
+            or self.indeed_location_var.get().strip()
         )
 
         if use_ft and not ft_has_criteria:
             use_ft = False
         if use_hw and not hw_has_criteria:
             use_hw = False
+        if use_indeed and not indeed_has_criteria:
+            use_indeed = False
 
-        if not use_ft and not use_hw:
+        if not use_ft and not use_hw and not use_indeed:
             messagebox.showwarning(
                 "Critères manquants",
-                "Les deux sources sont activées mais aucun critère n'a été rempli.\n\n"
+                "Les sources activées n'ont aucun critère rempli.\n\n"
                 "Renseigne au moins un mot-clé ou un lieu pour chaque source que tu veux utiliser.",
             )
             return
@@ -2783,10 +2950,14 @@ class App(tk.Tk):
         if use_hw and not apify:
             messagebox.showwarning("Identifiants", "HelloWork : token Apify requis.")
             return
+        if use_indeed and not apify:
+            messagebox.showwarning("Identifiants", "Indeed : token Apify requis.")
+            return
 
         try:
-            ft_max = int(self.ft_max_var.get().strip() or "500")
-            hw_max = int(self.hw_max_var.get().strip() or "200")
+            ft_max     = int(self.ft_max_var.get().strip() or "500")
+            hw_max     = int(self.hw_max_var.get().strip() or "200")
+            indeed_max = int(self.indeed_max_var.get().strip() or "100")
         except ValueError:
             messagebox.showwarning("Valeur invalide", "Les limites doivent être des entiers.")
             return
@@ -2824,13 +2995,15 @@ class App(tk.Tk):
             self._log(f"{'━'*48}")
 
         # Mémorise quelles sources étaient cochées par l'utilisateur (avant le filtre critères)
-        ft_checked = self.use_ft_var.get()
-        hw_checked = self.use_hw_var.get()
+        ft_checked     = self.use_ft_var.get()
+        hw_checked     = self.use_hw_var.get()
+        indeed_checked = self.use_indeed_var.get()
 
         threading.Thread(
             target=self._worker_search,
-            args=(use_ft, use_hw, cid, secret, apify, ft_max, hw_max,
-                  ft_checked, hw_checked),
+            args=(use_ft, use_hw, use_indeed, cid, secret, apify,
+                  ft_max, hw_max, indeed_max,
+                  ft_checked, hw_checked, indeed_checked),
             daemon=True,
         ).start()
 
@@ -2859,12 +3032,78 @@ class App(tk.Tk):
         else:
             subprocess.run(["xdg-open", self.last_output_path], check=False)
 
+    def _enrich_last_csv(self):
+        """
+        Lance l'enrichissement Pages Jaunes sur le dernier CSV exporté.
+        Exécute enrich_phone.py dans un thread en arrière-plan pour ne pas
+        bloquer l'interface. L'utilisateur peut suivre la progression dans
+        le journal. Le CSV enrichi est créé à côté de l'original.
+        """
+        if not self.last_output_path or not os.path.exists(self.last_output_path):
+            messagebox.showinfo("Aucun fichier",
+                                "Aucun export disponible. Télécharge d'abord un CSV.",
+                                parent=self)
+            return
+
+        token = os.environ.get("APIFY_TOKEN", "").strip()
+        if not token:
+            messagebox.showerror(
+                "Token manquant",
+                "APIFY_TOKEN manquant dans le .env.\n"
+                "L'enrichissement Pages Jaunes nécessite un token Apify.",
+                parent=self,
+            )
+            return
+
+        # Calculer le chemin de sortie
+        base, ext = os.path.splitext(self.last_output_path)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"{base}_enrichi_{ts}{ext}"
+
+        ans = messagebox.askyesno(
+            "Enrichissement téléphone",
+            f"Enrichir les numéros de téléphone via Pages Jaunes ?\n\n"
+            f"Source : {os.path.basename(self.last_output_path)}\n"
+            f"Sortie  : {os.path.basename(output_path)}\n\n"
+            "⚠️  Opération longue (~10s par entreprise unique).\n"
+            "Le journal affichera la progression.",
+            parent=self,
+        )
+        if not ans:
+            return
+
+        self._enrich_btn.configure(state="disabled")
+        self._log_msg("📞  Enrichissement Pages Jaunes démarré…")
+        self._status_var.set("📞  Enrichissement en cours…")
+
+        input_path   = self.last_output_path
+        enrich_out   = output_path
+        log_fn       = self._log_msg
+
+        def _worker():
+            try:
+                from enrich_phone import enrich_csv
+                count = enrich_csv(
+                    input_path=input_path,
+                    output_path=enrich_out,
+                    token=token,
+                    delay=1.5,
+                    max_results=3,
+                    log=log_fn,
+                )
+                self._queue.put(("enrich_done", (enrich_out, count)))
+            except Exception as exc:
+                self._queue.put(("enrich_error", str(exc)))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     # ------------------------------------------------------------------
     # Worker — search only, no export
     # ------------------------------------------------------------------
 
-    def _worker_search(self, use_ft, use_hw, cid, secret, apify, ft_max, hw_max,
-                       ft_checked=True, hw_checked=True):
+    def _worker_search(self, use_ft, use_hw, use_indeed, cid, secret, apify,
+                       ft_max, hw_max, indeed_max,
+                       ft_checked=True, hw_checked=True, indeed_checked=False):
         try:
             # Check annulation dès le début
             if self._cancel_search:
@@ -2883,6 +3122,10 @@ class App(tk.Tk):
             if hw_checked and not use_hw:
                 self._log(
                     "ℹ️  HelloWork activée mais aucun critère rempli — source ignorée."
+                )
+            if indeed_checked and not use_indeed:
+                self._log(
+                    "ℹ️  Indeed activée mais aucun critère rempli — source ignorée."
                 )
 
             if use_ft:
@@ -2934,17 +3177,22 @@ class App(tk.Tk):
                 keywords = [k.strip() for k in kw_raw.replace(",", "\n").split("\n")
                             if k.strip()]
 
-                # Secteur prédéfini → remplace ou complète les mots-clés manuels
-                hw_secteur = self.hw_secteur_var.get()
-                sector_mode = hw_secteur != "(aucun)" and hw_secteur in SECTEURS
+                # Secteurs sélectionnés → agrège les mots-clés de tous les secteurs
+                selected_hw_secteurs = self._hw_secteurs.get_tags()
+                sector_mode = bool(selected_hw_secteurs)
                 if sector_mode:
-                    sector_kw = SECTEURS[hw_secteur]["keywords"]
+                    sector_kw: list[str] = []
+                    for s in selected_hw_secteurs:
+                        if s in SECTEURS:
+                            for kw in SECTEURS[s]["keywords"]:
+                                if kw not in sector_kw:
+                                    sector_kw.append(kw)
                     if keywords:
                         keywords = keywords + [k for k in sector_kw if k not in keywords]
                     else:
-                        keywords = list(sector_kw)
+                        keywords = sector_kw
                     self._log(
-                        f"Secteur «{hw_secteur}» → {len(keywords)} métiers au total"
+                        f"Secteurs {selected_hw_secteurs} → {len(keywords)} métiers au total"
                     )
 
                 if not keywords and not self.hw_location_var.get().strip():
@@ -3033,6 +3281,44 @@ class App(tk.Tk):
                 self._log(f"HelloWork : {len(hw_rows)} offres après filtres\n")
                 all_rows.extend(hw_rows)
 
+            # ── Check annulation entre HW et Indeed ─────────────────
+            if self._cancel_search and all_rows:
+                self._log(f"🛑  Recherche annulée — {len(all_rows)} offre(s) partielle(s).")
+                self._queue.put(("search_done_partial", all_rows))
+                return
+
+            if use_indeed:
+                self._log("=== Indeed (Apify) ===")
+                indeed_kw = self.indeed_keywords_var.get().strip()
+                keywords_indeed = [k.strip() for k in indeed_kw.replace(",", "\n").split("\n")
+                                   if k.strip()]
+                indeed_location = self.indeed_location_var.get().strip()
+                indeed_date     = INDEED_DATE_POSTED.get(self.indeed_date_var.get(), "")
+
+                rayon_log = f" | Lieu : {indeed_location}" if indeed_location else ""
+                self._log(f"Mots-clés : {keywords_indeed or '(aucun)'}{rayon_log} | Depuis : {self.indeed_date_var.get()}")
+
+                try:
+                    indeed_rows_raw = fetch_indeed_offers(
+                        apify,
+                        search_queries=keywords_indeed or [""],
+                        location=indeed_location,
+                        max_results=indeed_max,
+                        date_posted=indeed_date,
+                        log=self._log,
+                        check_cancel=lambda: self._cancel_search,
+                    )
+                except IndeedError as e:
+                    self._log(f"⚠️  Erreur Indeed : {e}")
+                    indeed_rows_raw = []
+
+                post_kw = {k: v for k, v in post.items()
+                           if k not in ("exclude_recruiters", "recruiter_threshold")}
+                indeed_rows = apply_post_filters(indeed_rows_raw, **post_kw)
+                indeed_rows = self._apply_recruiter_filter(indeed_rows, post)
+                self._log(f"Indeed : {len(indeed_rows)} offres après filtres\n")
+                all_rows.extend(indeed_rows)
+
             if not all_rows:
                 if self._cancel_search:
                     self._log("🛑  Recherche annulée — aucun résultat partiel disponible.")
@@ -3079,7 +3365,7 @@ class App(tk.Tk):
             )
             self._queue.put(("search_done", (new_rows, ignored_ids)))
 
-        except (FranceTravailError, HelloWorkError) as e:
+        except (FranceTravailError, HelloWorkError, IndeedError) as e:
             if self._cancel_search and all_rows:
                 # Annulation avec résultats partiels — on les envoie quand même
                 self._log(f"🛑  Annulation — envoi de {len(all_rows)} résultat(s) partiel(s).")
