@@ -2763,10 +2763,11 @@ class App(tk.Tk):
                     self._status_var.set("🛑  Recherche annulée — aucun résultat partiel.")
                     self._log_msg("🛑  Recherche annulée.")
                 elif kind == "search_done_partial":
-                    # Annulation avec résultats partiels récupérés
+                    # Arrêt doux ou annulation avec résultats partiels récupérés
                     self._progress.stop()
                     self._set_ui_enabled(True)
                     partial_rows = payload
+                    is_stop = not self._cancel_search  # True = arrêt doux, False = annulation
                     if partial_rows:
                         new_rows, dupes = filter_new(partial_rows)
                         ignored_ids = set()
@@ -2782,8 +2783,9 @@ class App(tk.Tk):
                             self._pending_rows = new_rows
                             self._ignored_ids = ignored_ids
                         n = len(new_rows)
+                        prefix = "⏹  Arrêté" if is_stop else "🛑  Annulée"
                         self._status_var.set(
-                            f"🛑  Annulée — {n} résultat(s) partiel(s) récupéré(s)"
+                            f"{prefix} — {n} résultat(s) récupéré(s)"
                             + (f"  •  {dupes} doublon(s) ignoré(s)" if dupes else "")
                         )
                         self._download_btn.configure(state="normal")
@@ -2791,7 +2793,8 @@ class App(tk.Tk):
                         self._refresh_results_page()
                         self._show_results_page()
                     else:
-                        self._status_var.set("🛑  Annulée — aucun résultat partiel.")
+                        prefix = "⏹  Arrêté" if is_stop else "🛑  Annulée"
+                        self._status_var.set(f"{prefix} — aucun résultat partiel.")
                 elif kind == "error":
                     self._progress.stop()
                     self._set_ui_enabled(True)
@@ -2873,9 +2876,10 @@ class App(tk.Tk):
         else:
             self._add_btn.configure(state="disabled")
 
-        # Swap annuler → recherche quand l'UI redevient active
+        # Swap annuler/arrêter → recherche quand l'UI redevient active
         if enabled:
             self._cancel_btn.pack_forget()
+            self._stop_btn.pack_forget()
             self._run_btn.pack(side="left", padx=(0, 10))
 
     # ------------------------------------------------------------------
@@ -3139,9 +3143,10 @@ class App(tk.Tk):
         self._cancel_search = False  # reset du flag
         self._stop_after_current = False  # reset arrêt doux
         self._set_ui_enabled(False)
-        # Swap bouton recherche → annuler
+        # Swap bouton recherche → annuler + arrêter ici
         self._run_btn.pack_forget()
-        self._cancel_btn.pack(side="left", padx=(0, 10))
+        self._cancel_btn.pack(side="left", padx=(0, 4))
+        self._stop_btn.pack(side="left", padx=(0, 10))
         self._progress.start(12)
         self._status_var.set(
             "Recherche en cours…" if self._search_mode == "reset"
@@ -3179,10 +3184,26 @@ class App(tk.Tk):
                           label=f"{len(self._pending_rows)} offres")
 
     def _on_cancel_search(self):
-        """Annule la recherche en cours."""
+        """Annule la recherche — interrompt le run Apify en cours (abort côté serveur)."""
         self._cancel_search = True
-        self._log_msg("🛑  Annulation demandée — arrêt de la recherche en cours...")
-        self._status_var.set("⚠️  Annulation en cours...")
+        self._stop_after_current = True  # aussi activer le stop doux
+        self._log_msg("🛑  Annulation demandée — le run en cours sera interrompu…")
+        self._status_var.set("⚠️  Annulation en cours…")
+        # Griser les deux boutons pour éviter un double-clic
+        self._cancel_btn.configure(state="disabled")
+        self._stop_btn.configure(state="disabled")
+
+    def _on_stop_after_current(self):
+        """
+        Arrêt doux — finit le run Apify en cours sans l'interrompre,
+        puis s'arrête et retourne les résultats déjà récupérés.
+        Ne lance pas les runs suivants, ne fait pas d'abort côté Apify.
+        """
+        self._stop_after_current = True
+        self._log_msg("⏹  Arrêt demandé — fin du run en cours, puis export des résultats…")
+        self._status_var.set("⏹  Arrêt après le run en cours…")
+        # Griser le bouton stop mais garder Annuler actif
+        self._stop_btn.configure(state="disabled")
 
     def _open_last_csv(self):
         if not self.last_output_path or not os.path.exists(self.last_output_path):
@@ -3330,7 +3351,12 @@ class App(tk.Tk):
                 self._log(f"France Travail : {len(rows)} offres après filtres\n")
                 all_rows.extend(rows)
 
-            # Check annulation entre les deux sources — on garde les résultats FT déjà trouvés
+            # ── Stop doux après FT ───────────────────────────────────
+            if self._stop_after_current and not self._cancel_search:
+                self._log(f"⏹  Arrêt après France Travail — {len(all_rows)} offre(s) récupérée(s).")
+                self._queue.put(("search_done_partial", all_rows))
+                return
+
             if self._cancel_search:
                 self._log("🛑  Recherche annulée — récupération des résultats partiels...")
                 # On continue avec all_rows déjà rempli par FT si applicable
@@ -3410,6 +3436,9 @@ class App(tk.Tk):
                     if len(hw_rows_all) >= hw_max:
                         self._log(f"  ✓ Limite de {hw_max} résultats atteinte — groupes restants ignorés.")
                         break
+                    if self._stop_after_current and gi > 1:
+                        self._log(f"⏹  Arrêt demandé — fin après {gi-1}/{len(groups)} groupes.")
+                        break
                     if self._cancel_search:
                         self._log(f"🛑  Annulation après {gi-1}/{len(groups)} groupes — résultats partiels conservés.")
                         break
@@ -3445,7 +3474,11 @@ class App(tk.Tk):
                 self._log(f"HelloWork : {len(hw_rows)} offres après filtres\n")
                 all_rows.extend(hw_rows)
 
-            # ── Check annulation entre HW et Indeed ─────────────────
+            # ── Check arrêt/annulation entre HW et Indeed ───────────
+            if self._stop_after_current and not self._cancel_search:
+                self._log(f"⏹  Arrêt après HelloWork — {len(all_rows)} offre(s) récupérée(s).")
+                self._queue.put(("search_done_partial", all_rows))
+                return
             if self._cancel_search and all_rows:
                 self._log(f"🛑  Recherche annulée — {len(all_rows)} offre(s) partielle(s).")
                 self._queue.put(("search_done_partial", all_rows))
@@ -3508,6 +3541,7 @@ class App(tk.Tk):
                         group_size=indeed_group_size,
                         log=self._log,
                         check_cancel=lambda: self._cancel_search,
+                        check_stop=lambda: self._stop_after_current,
                     )
                 except IndeedError as e:
                     self._log(f"⚠️  Erreur Indeed : {e}")
@@ -3519,6 +3553,12 @@ class App(tk.Tk):
                 indeed_rows = self._apply_recruiter_filter(indeed_rows, post)
                 self._log(f"Indeed : {len(indeed_rows)} offres après filtres\n")
                 all_rows.extend(indeed_rows)
+
+            # ── Check arrêt doux après Indeed (avant dedup + cache) ─
+            if self._stop_after_current and not self._cancel_search:
+                self._log(f"⏹  Arrêt après Indeed — {len(all_rows)} offre(s) récupérée(s).")
+                self._queue.put(("search_done_partial", all_rows))
+                return
 
             # ── Déduplication cross-source ───────────────────────────
             # Détecte les annonces identiques postées sur plusieurs sites

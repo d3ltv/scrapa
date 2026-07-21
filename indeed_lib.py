@@ -426,24 +426,19 @@ def fetch_indeed_offers(
     group_size: int = 1,
     log=print,
     check_cancel=None,
+    check_stop=None,
 ) -> list[dict]:
     """
     Récupère les offres Indeed.
 
-    - search_queries : liste de mots-clés. Chaque query = 1 run Apify.
-    - group_size     : nb de mots-clés concaténés par run (optimisation).
-                       group_size=1 = 1 run par mot-clé (plus précis).
-                       group_size>1 = on joint les mots-clés par espace.
-    - contract_types : filtre post-fetch ["CDI", "CDD", ...].
-                       Indeed ne supporte pas de filtre contrat en input.
-    - max_results    : plafond total toutes queries confondues.
+    - check_cancel : lambda → bool — interrompt le run Apify en cours (abort)
+    - check_stop   : lambda → bool — finit le run en cours puis s'arrête (arrêt doux)
     """
     all_rows: list[dict] = []
     seen_ids: set[str] = set()
 
     queries = [q.strip() for q in (search_queries or []) if q.strip()] or [""]
 
-    # Regroupement des queries si group_size > 1
     if group_size > 1:
         groups = [
             " ".join(queries[i:i + group_size])
@@ -458,6 +453,10 @@ def fetch_indeed_offers(
     for gi, query in enumerate(groups, 1):
         if check_cancel and check_cancel():
             log("🛑 Annulation Indeed.")
+            break
+        # Arrêt doux : on ne démarre pas de nouveau run si demandé
+        if check_stop and check_stop() and gi > 1:
+            log(f"⏹  Arrêt Indeed après {gi-1}/{total_groups} groupe(s).")
             break
         if len(all_rows) >= max_results:
             log(f"  ✓ Limite {max_results} atteinte — runs restants ignorés.")
@@ -491,7 +490,6 @@ def fetch_indeed_offers(
                 continue
             if rid:
                 seen_ids.add(rid)
-            # Filtre contrat post-fetch
             if not _matches_contract_filter(row, contract_types or []):
                 continue
             all_rows.append(row)
