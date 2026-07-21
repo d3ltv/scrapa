@@ -197,7 +197,7 @@ def _clean_ville(libelle: str | None) -> str | None:
     return cleaned if cleaned else libelle
 
 
-
+def flatten_offer(offer: dict) -> dict:
     entreprise = offer.get("entreprise")
     # Robustesse : l'API peut exceptionnellement renvoyer un string au lieu d'un dict
     if not isinstance(entreprise, dict):

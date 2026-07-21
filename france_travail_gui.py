@@ -32,10 +32,12 @@ from hellowork_lib import (
 )
 from indeed_lib import (
     fetch_indeed_offers, IndeedError,
-    INDEED_DATE_POSTED,
+    INDEED_DATE_POSTED, INDEED_CONTRATS,
+    resolve_indeed_location,
 )
 from seen_ids_cache import filter_new, commit_rows, get_stats, clear_cache, load_seen_ids, get_row_id, archive_csv, list_archives, restore_from_archive, get_archive_stats
 from recruiter_filter import filter_out_recruiters
+from cross_dedup import deduplicate_cross_source, dedup_stats
 from company_search import (
     load_company_names as cs_load_company_names,
     list_csv_columns as cs_list_csv_columns,
@@ -59,6 +61,9 @@ _FT_EXTRA_FIELDS = [
     "contact_url_recrutement", "contact_url_postuler", "contact_commentaire",
     # HW enriched spécifiques
     "secteur_entreprise",
+    # Pages Jaunes — enrichissement post-export
+    "pj_telephone", "pj_email", "pj_siret", "pj_site_web",
+    "pj_adresse", "pj_url_fiche",
 ]
 ALL_UNIFIED_FIELDNAMES = list(HW_UNIFIED_FIELDNAMES) + [
     f for f in _FT_EXTRA_FIELDS if f not in HW_UNIFIED_FIELDNAMES
@@ -561,6 +566,7 @@ SECTEUR_CHOICES = ["(aucun)"] + sorted(SECTEURS.keys())
 COLUMNS = [
     ("url",                     "Lien",              180),
     ("lien_maps",               "📍 Maps",            160),
+    ("lien_recherche_dirigeant","🔍 Recherche dirigeant", 200),
     ("source",                  "Source",              80),
     ("intitule",                "Poste",              200),
     ("entreprise",              "Entreprise",         160),
@@ -576,6 +582,13 @@ COLUMNS = [
     ("contact_nom",             "Contact (nom)",      130),
     ("contact_telephone",       "📞 Téléphone",        120),
     ("contact_email",           "📧 Email",            160),
+    # Pages Jaunes — enrichissement téléphone
+    ("pj_telephone",            "📞 Tél. (PJ)",        130),
+    ("pj_email",                "📧 Email (PJ)",       160),
+    ("pj_siret",                "SIRET (PJ)",          130),
+    ("pj_site_web",             "Site web (PJ)",       180),
+    ("pj_adresse",              "Adresse (PJ)",        200),
+    ("pj_url_fiche",            "Fiche PJ",            180),
     # Dirigeant
     ("dirigeant_nom",           "Dirigeant",          130),
     ("dirigeant_titre",         "Titre dirigeant",    110),
@@ -688,21 +701,97 @@ class TagList(ttk.Frame):
         available = [c for c in self._choices if c not in self._tags]
         if not available:
             return
+
         popup = tk.Toplevel(self)
-        popup.title("Ajouter")
-        popup.resizable(False, False)
+        popup.title("Ajouter un secteur")
+        popup.resizable(True, True)
         popup.transient(self)
-        popup.grab_set()
+        # PAS de grab_set() — il bloque le redraw de la fenêtre principale
+
+        # Positionner sous le bouton +, en évitant de sortir de l'écran
+        self.update_idletasks()
         x = self._add_btn.winfo_rootx()
         y = self._add_btn.winfo_rooty() + self._add_btn.winfo_height()
-        popup.geometry(f"+{x}+{y}")
-        for choice in available:
-            ttk.Button(
-                popup, text=choice, width=18,
-                command=lambda c=choice, p=popup: (self._add_tag(c), p.destroy()),
-            ).pack(fill="x", padx=4, pady=2)
+        screen_h = popup.winfo_screenheight()
+        popup_h = min(420, len(available) * 28 + 70)
+        if y + popup_h > screen_h - 40:
+            y = self._add_btn.winfo_rooty() - popup_h
+        popup.geometry(f"300x{popup_h}+{x}+{y}")
+
+        # Barre de recherche
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(popup, textvariable=search_var)
+        search_entry.pack(fill="x", padx=6, pady=(6, 2))
+        search_entry.focus_set()
+
+        # Liste scrollable
+        frame = tk.Frame(popup)
+        frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+
+        vsb = ttk.Scrollbar(frame, orient="vertical")
+        vsb.pack(side="right", fill="y")
+
+        import sys as _sys
+        listbox = tk.Listbox(
+            frame, yscrollcommand=vsb.set,
+            selectmode="single", activestyle="none",
+            relief="flat", borderwidth=0,
+            font=("SF Pro Display" if _sys.platform == "darwin" else "Segoe UI", 10),
+            height=15,
+        )
+        listbox.pack(side="left", fill="both", expand=True)
+        vsb.config(command=listbox.yview)
+
+        def _refresh(event=None):
+            q = search_var.get().lower().strip()
+            listbox.delete(0, "end")
+            for c in available:
+                if q in c.lower():
+                    listbox.insert("end", c)
+            if listbox.size() > 0:
+                listbox.selection_set(0)
+
+        search_var.trace_add("write", lambda *_: _refresh())
+        _refresh()
+
+        def _confirm(event=None):
+            sel = listbox.curselection()
+            if not sel:
+                # Si rien sélectionné mais un seul item visible, le prendre
+                if listbox.size() == 1:
+                    listbox.selection_set(0)
+                    sel = (0,)
+                else:
+                    return
+            choice = listbox.get(sel[0])
+            self._add_tag(choice)
+            # Force le redraw immédiat du tag dans la page principale
+            self.update_idletasks()
+            self._tags_frame.update_idletasks()
+            # Retirer de la liste disponible et rafraîchir
+            if choice in available:
+                available.remove(choice)
+            _refresh()
+            # Remettre le focus sur la recherche pour enchaîner les sélections
+            search_entry.focus_set()
+            search_entry.select_range(0, "end")
+            if not available:
+                popup.destroy()
+
+        listbox.bind("<Return>",      _confirm)
+        listbox.bind("<Double-1>",    _confirm)
+        search_entry.bind("<Return>", _confirm)
+        search_entry.bind("<Down>",   lambda e: (listbox.focus_set(),
+                                                  listbox.selection_set(0)
+                                                  if not listbox.curselection() else None))
+        listbox.bind("<Up>", lambda e: search_entry.focus_set()
+                     if listbox.curselection() and listbox.curselection()[0] == 0 else None)
+
         popup.bind("<Escape>", lambda e: popup.destroy())
-        popup.bind("<FocusOut>", lambda e: popup.destroy())
+
+        ttk.Button(popup, text="Fermer", command=popup.destroy).pack(
+            side="bottom", pady=(0, 4)
+        )
 
     def _open_freetext_popup(self):
         popup = tk.Toplevel(self)
@@ -757,9 +846,10 @@ class App(tk.Tk):
         self._res_filtered: list[dict] = []
         self._col_vars: dict[str, tk.BooleanVar] = {}
         self._hide_dupes_active: bool = False
-        self._cancel_search: bool = False   # flag d'annulation
+        self._cancel_search: bool = False   # flag d'annulation (abort run Apify)
+        self._stop_after_current: bool = False  # flag "arrêt doux" (finit le run en cours)
         self._recruiter_threshold_var = tk.StringVar(value="2")
-        self.filter_recruiters_var    = tk.BooleanVar(value=False)
+        self.filter_recruiters_var    = tk.BooleanVar(value=True)
         self.post_company_var         = tk.StringVar(value="")
         self.post_sector_var          = tk.StringVar(value="")
         self._dark_mode: bool = False
@@ -1361,6 +1451,18 @@ class App(tk.Tk):
         )
         self._dl_all_btn.pack(side="right", padx=(4, 4))
 
+        # Bouton enrichissement Pages Jaunes — page Résultats
+        self._res_enrich_btn = tk.Button(
+            tb, text="📞 Enrichir tél. (Pages Jaunes)",
+            relief="flat", cursor="hand2",
+            bg=self._ACCENT, fg="white",
+            activebackground="#005BBB", activeforeground="white",
+            font=self._font(10), padx=8,
+            state="disabled",
+            command=self._enrich_last_csv,
+        )
+        self._res_enrich_btn.pack(side="right", padx=(4, 0))
+
         # ── Barre de statut résultats ─────────────────────────────────
         stat_bar = tk.Frame(self._results_page, bg=self._CARD,
                             highlightbackground=self._BORDER, highlightthickness=1)
@@ -1956,6 +2058,7 @@ class App(tk.Tk):
         self.last_output_path = output_path
         self._open_btn.configure(state="normal")
         self._enrich_btn.configure(state="normal")
+        self._res_enrich_btn.configure(state="normal")
         self._status_var.set(f"✅  {count} offres exportées  —  {output_path}")
         self._log_msg(f"💾 {count} offres enregistrées → {output_path}")
         self._update_results_count(len(self._pending_rows))
@@ -2193,18 +2296,31 @@ class App(tk.Tk):
             command=self._toggle_indeed_fields,
         ).pack(side="left")
 
+        # Mots-clés libres
         c = self._field_row(lf, "Mots-clés", "ex: développeur, plombier, chef de chantier")
         self.indeed_keywords_var = tk.StringVar()
         kw_e = ttk.Entry(c, textvariable=self.indeed_keywords_var, width=40)
         kw_e.pack(side="left")
         self._indeed_widgets.append(kw_e)
 
-        c = self._field_row(lf, "Lieu", "Tours, Lyon, Paris, 37000…")
+        # Secteurs (même TagList que HW — génère les mots-clés métiers)
+        c = self._field_row(lf, "Secteurs", "＋ pour ajouter · plusieurs secteurs = requêtes cumulées")
+        self._indeed_secteurs = TagList(c, choices=sorted(SECTEURS.keys()))
+        self._indeed_secteurs.pack(side="left", fill="x", expand=True)
+        self._indeed_secteurs.bind_change(self._on_indeed_secteur_change)
+        self._indeed_widgets.append(self._indeed_secteurs)
+        self._indeed_secteur_info = tk.Label(c, text="", bg=self._CARD, fg=self._FG_MUTED,
+                                              font=self._font(9))
+        self._indeed_secteur_info.pack(side="left", padx=(8, 0))
+
+        # Lieu
+        c = self._field_row(lf, "Lieu", "Tours, Lyon, Paris, 37, 37000…")
         self.indeed_location_var = tk.StringVar()
         loc_e = ttk.Entry(c, textvariable=self.indeed_location_var, width=22)
         loc_e.pack(side="left")
         self._indeed_widgets.append(loc_e)
 
+        # Date
         c = self._field_row(lf, "Publiée depuis")
         self.indeed_date_var = tk.StringVar(value="Toutes dates")
         date_cb = ttk.Combobox(
@@ -2214,20 +2330,39 @@ class App(tk.Tk):
         date_cb.pack(side="left")
         self._indeed_widgets.append(date_cb)
 
+        # Contrats
+        c = self._field_row(lf, "Contrats", "Aucune sélection = tous")
+        self.indeed_contract_vars: dict[str, tk.BooleanVar] = {}
+        for label, code in INDEED_CONTRATS:
+            var = tk.BooleanVar(value=False)
+            self.indeed_contract_vars[code] = var
+            cb = tk.Checkbutton(
+                c, text=label, variable=var,
+                bg=self._CARD, fg=self._FG,
+                activebackground=self._CARD, selectcolor=self._CARD,
+            )
+            cb.pack(side="left", padx=(0, 10))
+            self._indeed_widgets.append(cb)
+
+        # Max résultats + groupe
         c = self._field_row(lf, "Max résultats", "max 1000 via Apify")
         self.indeed_max_var = tk.StringVar(value="100")
         max_e = ttk.Entry(c, textvariable=self.indeed_max_var, width=7)
         max_e.pack(side="left")
         self._indeed_widgets.append(max_e)
 
-        # Désactivé par défaut
-        for w in self._indeed_widgets:
-            try:
-                w.configure(state="disabled")
-            except tk.TclError:
-                pass
+        c = self._field_row(lf, "Métiers/groupe", "si secteur : nb de métiers concaténés par run")
+        self.indeed_group_size_var = tk.StringVar(value="1")
+        gs_e = ttk.Entry(c, textvariable=self.indeed_group_size_var, width=4)
+        gs_e.pack(side="left")
+        self._indeed_widgets.append(gs_e)
+        tk.Label(c, text="(1 = un run par métier — plus précis, recommandé pour Indeed)",
+                 bg=self._CARD, fg=self._FG_MUTED,
+                 font=self._font(9)).pack(side="left", padx=(8, 0))
 
         tk.Frame(lf, bg=self._CARD, height=6).pack()
+        # Applique l'état initial (désactivé car use_indeed_var = False par défaut)
+        self._toggle_indeed_fields()
 
     # ------------------------------------------------------------------
     # Post-filters
@@ -2246,7 +2381,7 @@ class App(tk.Tk):
 
         # Filtre cabinets de recrutement et agences d'intérim
         c = self._field_row(lf, "Intermédiaires RH", "évince cabinets de recrutement et agences d'intérim")
-        self.filter_recruiters_var = tk.BooleanVar(value=False)
+        # filter_recruiters_var est initialisé dans __init__ à True
         tk.Checkbutton(
             c, text="Exclure cabinets de recrutement et agences d'intérim",
             variable=self.filter_recruiters_var,
@@ -2282,14 +2417,25 @@ class App(tk.Tk):
         )
         self._run_btn.pack(side="left", padx=(0, 10))
 
-        # Bouton annuler (caché par défaut)
+        # Bouton annuler (caché par défaut) — interrompt le run Apify en cours
         self._cancel_btn = tk.Button(
-            f, text="  ✖  Annuler la recherche  ",
+            f, text="  ✖  Annuler  ",
             bg="#FF3B30", fg="white",
             activebackground="#CC2D24", activeforeground="white",
             font=self._font(12, "bold"), relief="flat", cursor="hand2",
-            padx=20, pady=8,
+            padx=14, pady=8,
             command=self._on_cancel_search,
+        )
+        # Pas pack() ici — sera affiché dynamiquement
+
+        # Bouton arrêt doux (caché par défaut) — finit le run en cours puis s'arrête
+        self._stop_btn = tk.Button(
+            f, text="  ⏹  Arrêter ici  ",
+            bg="#FF9500", fg="white",
+            activebackground="#CC7700", activeforeground="white",
+            font=self._font(12, "bold"), relief="flat", cursor="hand2",
+            padx=14, pady=8,
+            command=self._on_stop_after_current,
         )
         # Pas pack() ici — sera affiché dynamiquement
 
@@ -2463,6 +2609,16 @@ class App(tk.Tk):
                 text=f"{len(tags)} secteur(s) · {total_kw} mots-clés"
             )
 
+    def _on_indeed_secteur_change(self, event=None):
+        tags = self._indeed_secteurs.get_tags()
+        if not tags:
+            self._indeed_secteur_info.configure(text="")
+        else:
+            total_kw = sum(len(SECTEURS[s]["keywords"]) for s in tags if s in SECTEURS)
+            self._indeed_secteur_info.configure(
+                text=f"{len(tags)} secteur(s) · {total_kw} mots-clés"
+            )
+
     # ------------------------------------------------------------------
     # Toggle helpers
     # ------------------------------------------------------------------
@@ -2493,6 +2649,8 @@ class App(tk.Tk):
                 w.configure(state=state)
             except tk.TclError:
                 pass
+        if hasattr(self, "_indeed_secteurs"):
+            self._indeed_secteurs.configure_state(state)
 
     def _toggle_ft_secret(self):
         self._ft_secret_visible = not self._ft_secret_visible
@@ -2543,6 +2701,7 @@ class App(tk.Tk):
                         self.last_output_path = payload
                         self._open_btn.configure(state="normal")
                         self._enrich_btn.configure(state="normal")
+                        self._res_enrich_btn.configure(state="normal")
                         self._status_var.set(f"✅  Export terminé  —  {payload}")
                     else:
                         self._status_var.set("Aucune offre trouvée.")
@@ -2674,6 +2833,7 @@ class App(tk.Tk):
                     # Fin enrichissement Pages Jaunes
                     enrich_path, count = payload
                     self._enrich_btn.configure(state="normal")
+                    self._res_enrich_btn.configure(state="normal")
                     self._status_var.set(
                         f"✅  Enrichissement terminé — {count} tél. trouvé(s) → {os.path.basename(enrich_path)}"
                     )
@@ -2694,6 +2854,7 @@ class App(tk.Tk):
                                 subprocess.run(["xdg-open", enrich_path], check=False)
                 elif kind == "enrich_error":
                     self._enrich_btn.configure(state="normal")
+                    self._res_enrich_btn.configure(state="normal")
                     self._status_var.set("❌  Enrichissement échoué")
                     self._log_msg(f"❌ Erreur enrichissement : {payload}")
                     messagebox.showerror("Erreur enrichissement", str(payload), parent=self)
@@ -2926,6 +3087,7 @@ class App(tk.Tk):
         indeed_has_criteria = bool(
             self.indeed_keywords_var.get().strip()
             or self.indeed_location_var.get().strip()
+            or self._indeed_secteurs.get_tags()
         )
 
         if use_ft and not ft_has_criteria:
@@ -2975,6 +3137,7 @@ class App(tk.Tk):
             self._update_results_count(0)
 
         self._cancel_search = False  # reset du flag
+        self._stop_after_current = False  # reset arrêt doux
         self._set_ui_enabled(False)
         # Swap bouton recherche → annuler
         self._run_btn.pack_forget()
@@ -3073,6 +3236,7 @@ class App(tk.Tk):
             return
 
         self._enrich_btn.configure(state="disabled")
+        self._res_enrich_btn.configure(state="disabled")
         self._log_msg("📞  Enrichissement Pages Jaunes démarré…")
         self._status_var.set("📞  Enrichissement en cours…")
 
@@ -3289,14 +3453,49 @@ class App(tk.Tk):
 
             if use_indeed:
                 self._log("=== Indeed (Apify) ===")
-                indeed_kw = self.indeed_keywords_var.get().strip()
-                keywords_indeed = [k.strip() for k in indeed_kw.replace(",", "\n").split("\n")
+                indeed_kw_raw = self.indeed_keywords_var.get().strip()
+                keywords_indeed = [k.strip() for k in indeed_kw_raw.replace(",", "\n").split("\n")
                                    if k.strip()]
+
+                # Secteurs → agrège les mots-clés métiers (même logique que HW)
+                selected_indeed_secteurs = self._indeed_secteurs.get_tags()
+                indeed_sector_mode = bool(selected_indeed_secteurs)
+                if indeed_sector_mode:
+                    sector_kw: list[str] = []
+                    for s in selected_indeed_secteurs:
+                        if s in SECTEURS:
+                            for kw in SECTEURS[s]["keywords"]:
+                                if kw not in sector_kw:
+                                    sector_kw.append(kw)
+                    if keywords_indeed:
+                        keywords_indeed = keywords_indeed + [k for k in sector_kw if k not in keywords_indeed]
+                    else:
+                        keywords_indeed = sector_kw
+                    self._log(
+                        f"Secteurs {selected_indeed_secteurs} → {len(keywords_indeed)} métiers"
+                    )
+
+                # Résolution lieu (département → ville)
                 indeed_location = self.indeed_location_var.get().strip()
-                indeed_date     = INDEED_DATE_POSTED.get(self.indeed_date_var.get(), "")
+                indeed_location, loc_resolved = resolve_indeed_location(indeed_location)
+                if loc_resolved:
+                    self._log(f"  📍 Département détecté → recherche sur : {indeed_location}")
+
+                indeed_date = INDEED_DATE_POSTED.get(self.indeed_date_var.get(), "")
+                indeed_contract_types = [
+                    code for code, var in self.indeed_contract_vars.items() if var.get()
+                ]
+                try:
+                    indeed_group_size = max(1, int(self.indeed_group_size_var.get().strip() or "3"))
+                except ValueError:
+                    indeed_group_size = 3
 
                 rayon_log = f" | Lieu : {indeed_location}" if indeed_location else ""
-                self._log(f"Mots-clés : {keywords_indeed or '(aucun)'}{rayon_log} | Depuis : {self.indeed_date_var.get()}")
+                self._log(
+                    f"Mots-clés : {len(keywords_indeed)} | Groupes de {indeed_group_size}"
+                    f"{rayon_log} | Depuis : {self.indeed_date_var.get()}"
+                    + (f" | Contrats : {indeed_contract_types}" if indeed_contract_types else "")
+                )
 
                 try:
                     indeed_rows_raw = fetch_indeed_offers(
@@ -3305,6 +3504,8 @@ class App(tk.Tk):
                         location=indeed_location,
                         max_results=indeed_max,
                         date_posted=indeed_date,
+                        contract_types=indeed_contract_types or None,
+                        group_size=indeed_group_size,
                         log=self._log,
                         check_cancel=lambda: self._cancel_search,
                     )
@@ -3318,6 +3519,20 @@ class App(tk.Tk):
                 indeed_rows = self._apply_recruiter_filter(indeed_rows, post)
                 self._log(f"Indeed : {len(indeed_rows)} offres après filtres\n")
                 all_rows.extend(indeed_rows)
+
+            # ── Déduplication cross-source ───────────────────────────
+            # Détecte les annonces identiques postées sur plusieurs sites
+            if len(all_rows) > 1:
+                sources_used = {r.get("source") for r in all_rows}
+                if len(sources_used) > 1:
+                    before_dedup = len(all_rows)
+                    all_rows, cross_dupes = deduplicate_cross_source(
+                        all_rows, similarity_threshold=0.75, log=self._log
+                    )
+                    if cross_dupes:
+                        self._log(dedup_stats(
+                            [None] * before_dedup, all_rows, cross_dupes
+                        ))
 
             if not all_rows:
                 if self._cancel_search:

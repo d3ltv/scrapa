@@ -87,10 +87,11 @@ COMPANY_NAME_PATTERNS = [
 
     # Agences d'intérim / travail temporaire
     r"\btemporis\b",
-    r"\btriangle\s+(interim|intérim|solutions?|emploi)\b",
-    r"\bsamsic\s+(emploi|rh|interim|intérim)?\b",
+    r"\btriangle\b",   # Triangle Intérim / Triangle Solutions / Triangle Emploi
+    r"\btriangle\s+(interim|intérim|solutions?|emploi|rh)?\b",
+    r"\bsamsic\s*(emploi|rh|interim|intérim)?\b",
     r"\bgrafton\b",
-    r"\bdomino\s+(rh|staff|missions?|interim|intérim)?\b",
+    r"\bdomino\s*(rh|staff|missions?|interim|intérim)?\b",
     r"\bflexijob\b",
     r"\bkelly\s*(services?|ocg)?\b",
     r"\bolvea\b",
@@ -108,14 +109,36 @@ COMPANY_NAME_PATTERNS = [
     r"\beffectif\s+service\b",
     r"\bmanpower\s+interim\b",
     r"\bmission\s+locale\b",
-    r"\bemploi\s+intérim\b",
-    r"\bemploi\s+interim\b",
-    r"\bagence\s+intérim\b",
-    r"\bagence\s+interim\b",
+    r"\bemploi\s+int[eé]rim\b",
+    r"\bagence\s+int[eé]rim\b",
     r"\btravailleur[s]?\s+temporaire[s]?\b",
-    r"\bsté\s+(d'?interim|d'?intérim)\b",
-    r"\bsociété\s+(d'?interim|d'?intérim)\b",
-    r"\bcontrat\s+(d'?interim|d'?intérim)\b",
+    r"\bst[eé]\s+(d'?interim|d'?int[eé]rim)\b",
+    r"\bsoci[eé]t[eé]\s+(d'?interim|d'?int[eé]rim)\b",
+    r"\bcontrat\s+(d'?interim|d'?int[eé]rim)\b",
+    # Agences supplémentaires fréquentes
+    r"\binteraction\s*(interim|int[eé]rim|emploi|rh)?\b",
+    r"\bjubil\s*(interim|int[eé]rim)?\b",
+    r"\bwelljob\b",
+    r"\bapel\s*(interim|int[eé]rim)?\b",
+    r"\bappel\s*m[eé]dical\b",
+    r"\bjob\s*and\s*box\b",
+    r"\btaskforce\b",
+    r"\bfiderim\b",
+    r"\bipso\s*facto\b",
+    r"\bregiforce\b",
+    r"\bphi\s*rh\b",
+    r"\bphi\b",   # Phi RH (cabinet BTP fréquent)
+    r"\bnextep\b",
+    r"\bprofilens\b",
+    r"\bsupply\s*chain\s*rh\b",
+    r"\btemp\s*o\b",
+    r"\bman\s*at\s*work\b",
+    r"\badvancia\b",
+    r"\bpearl\b",   # Pearl RH
+    r"\bjob\s*&\s*vous\b",
+    r"\bgroup[e]?\s*leader\b",   # Group Leader (intérim BTP)
+    r"\bpyxalis\b",
+    r"\btalent\s*s?\s*link\b",
 
     # Cabinets spécialisés BTP / industrie fréquents
     r"\bbtp\s+recrutement\b",
